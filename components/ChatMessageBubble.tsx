@@ -9,9 +9,15 @@ export function ChatMessageBubble(props: {
 }) {
   // Function to safely render HTML content
   const createMarkup = (content: string) => {
-    const sanitizedContent = DOMPurify.sanitize(content, {
+    // Add classes to links before sanitizing
+    const contentWithStyledLinks = content.replace(
+      /<a\s+href="([^"]+)">/g,
+      '<a href="$1" class="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">'
+    );
+
+    const sanitizedContent = DOMPurify.sanitize(contentWithStyledLinks, {
       ALLOWED_TAGS: ['a'],
-      ALLOWED_ATTR: ['href', 'target', 'rel']
+      ALLOWED_ATTR: ['href', 'target', 'rel', 'class']
     });
     return { __html: sanitizedContent };
   };
