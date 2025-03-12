@@ -11,6 +11,7 @@ import React from "react";
 
 import { ChatMessageBubble } from "@/components/ChatMessageBubble";
 import { IntermediateStep } from "@/components/IntermediateStep";
+import { LoadingBubble } from "@/components/LoadingBubble";
 import { Button } from "./ui/button";
 import { ArrowDown, LoaderCircle, Paperclip } from "lucide-react";
 import { Checkbox } from "./ui/checkbox";
@@ -26,6 +27,7 @@ function ChatMessages(props: {
   sourcesForMessages: Record<string, any>;
   aiEmoji?: string;
   className?: string;
+  isLoading?: boolean;
 }) {
   const { scrollToBottom } = useStickToBottomContext();
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
@@ -75,6 +77,7 @@ function ChatMessages(props: {
           />
         );
       })}
+      {props.isLoading && <LoadingBubble />}
       <div ref={messagesEndRef} />
     </div>
   );
@@ -83,6 +86,7 @@ function ChatMessages(props: {
 export function ChatInput(props: {
   onSubmit: (e: FormEvent<HTMLFormElement>) => void;
   onStop?: () => void;
+  onClear?: () => void;
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   loading?: boolean;
@@ -115,7 +119,17 @@ export function ChatInput(props: {
         />
 
         <div className="flex justify-between ml-4 mr-2 mb-2">
-          <div className="flex gap-3">{props.children}</div>
+          <div className="flex gap-3">
+            {props.children}
+            <Button 
+              type="button" 
+              variant="destructive" 
+              onClick={props.onClear}
+              className="self-end"
+            >
+              Clear History
+            </Button>
+          </div>
 
           <div className="flex gap-2 self-end">
             {props.actions}
@@ -203,12 +217,6 @@ export function ChatWindow(props: {
   showIntermediateStepsToggle?: boolean;
   headers?: Record<string, string>;
 }) {
-  const [showIntermediateSteps, setShowIntermediateSteps] = useState(
-    !!props.showIntermediateStepsToggle,
-  );
-  const [intermediateStepsLoading, setIntermediateStepsLoading] =
-    useState(false);
-
   const [sourcesForMessages, setSourcesForMessages] = useState<
     Record<string, any>
   >({});
@@ -244,7 +252,6 @@ export function ChatWindow(props: {
               for (const match of matches) {
                 try {
                   const jsonContent = match[1];
-                  console.log(jsonContent);
                   const update = JSON.parse(jsonContent);
                   
                   // Update the last message with the new content
@@ -305,102 +312,22 @@ export function ChatWindow(props: {
       }),
   });
 
-
   async function sendMessage(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (chat.isLoading || intermediateStepsLoading) return;
+    if (chat.isLoading) return;
 
-    if (!showIntermediateSteps) {
-      try {
-        chat.handleSubmit(e);
-      } catch (error) {
-        console.error("Error sending message:", error);
-      }
-      return;
+    try {
+      chat.handleSubmit(e);
+    } catch (error) {
+      console.error("Error sending message:", error);
     }
-
-    // Some extra work to show intermediate steps properly
-    setIntermediateStepsLoading(true);
-
-    chat.setInput("");
-    const messagesWithUserReply = chat.messages.concat({
-      id: chat.messages.length.toString(),
-      content: chat.input,
-      role: "user",
-      parts: []
-    });
-    chat.setMessages(messagesWithUserReply);
-
-    const response = await fetch(props.endpoint, {
-      method: "POST",
-      body: JSON.stringify({
-        messages: messagesWithUserReply,
-        show_intermediate_steps: true,
-      }),
-    });
-    const json = await response.json();
-    setIntermediateStepsLoading(false);
-
-    if (!response.ok) {
-      toast.error(`Error while processing your request`, {
-        description: json.error,
-      });
-      return;
-    }
-
-    const responseMessages: Message[] = json.messages;
-
-    // Represent intermediate steps as system messages for display purposes
-    // TODO: Add proper support for tool messages
-    const toolCallMessages = responseMessages.filter(
-      (responseMessage: Message) => {
-        const toolInvocationParts = responseMessage.parts?.filter(
-          part => part.type === "tool-invocation"
-        );
-        return (
-          (responseMessage.role === "assistant" &&
-            toolInvocationParts &&
-            toolInvocationParts.length > 0) ||
-          responseMessage.role === "data"
-        );
-      },
-    );
-
-    const intermediateStepMessages = [];
-    for (let i = 0; i < toolCallMessages.length; i += 2) {
-      const aiMessage = toolCallMessages[i];
-      const toolInvocationPart = aiMessage.parts?.find(
-        part => part.type === "tool-invocation"
-      ) as ToolInvocationUIPart | undefined;
-      const toolMessage = toolCallMessages[i + 1];
-      intermediateStepMessages.push({
-        id: (messagesWithUserReply.length + i / 2).toString(),
-        role: "system" as const,
-        content: JSON.stringify({
-          action: toolInvocationPart?.toolInvocation,
-          observation: toolMessage.content,
-        }),
-        parts: []
-      });
-    }
-    const newMessages = messagesWithUserReply;
-    for (const message of intermediateStepMessages) {
-      newMessages.push(message);
-      chat.setMessages([...newMessages]);
-      await new Promise((resolve) =>
-        setTimeout(resolve, 1000 + Math.random() * 1000),
-      );
-    }
-
-    chat.setMessages([
-      ...newMessages,
-      {
-        id: newMessages.length.toString(),
-        content: responseMessages[responseMessages.length - 1].content,
-        role: "assistant",
-      },
-    ]);
+    return;
   }
+
+  const clearHistory = () => {
+    chat.setMessages([]);
+    setSourcesForMessages({});
+  };
 
   return (
     <ChatLayout
@@ -416,6 +343,7 @@ export function ChatWindow(props: {
             })) as ChatMessage[]}
             emptyStateComponent={props.emptyStateComponent}
             sourcesForMessages={sourcesForMessages}
+            isLoading={chat.isLoading}
           />
         )
       }
@@ -424,24 +352,10 @@ export function ChatWindow(props: {
           value={chat.input}
           onChange={chat.handleInputChange}
           onSubmit={sendMessage}
-          loading={chat.isLoading || intermediateStepsLoading}
+          onClear={clearHistory}
+          loading={chat.isLoading}
           placeholder={props.placeholder ?? "What's it like to be a pirate?"}
         >
-
-          {props.showIntermediateStepsToggle && (
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="show_intermediate_steps"
-                name="show_intermediate_steps"
-                checked={showIntermediateSteps}
-                disabled={chat.isLoading || intermediateStepsLoading}
-                onCheckedChange={(e) => setShowIntermediateSteps(!!e)}
-              />
-              <label htmlFor="show_intermediate_steps" className="text-sm">
-                Show intermediate steps
-              </label>
-            </div>
-          )}
         </ChatInput>
       }
     />

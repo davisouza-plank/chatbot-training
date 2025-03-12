@@ -26,14 +26,14 @@ export default function ChatPage() {
     <div className="flex h-[calc(100vh-4rem)] w-4/5 mx-auto relative">
       <div className="absolute inset-0 overflow-hidden">
         <ChatWindow
-          endpoint="/api/chat/agents"
+          endpoint="/api/chat/multi"
           emptyStateComponent={
             <div className="text-center">
               <h1 className="text-2xl font-bold mb-4">Welcome to the Chat!</h1>
               <p>Start a conversation by typing a message below.</p>
             </div>
           }
-          placeholder="Type your message..."
+          placeholder="How's the weather in San Francisco?"
           showIntermediateStepsToggle={false}
           headers={{
             'Authorization': authHeader

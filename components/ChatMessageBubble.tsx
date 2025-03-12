@@ -1,6 +1,10 @@
 import { cn } from "@/lib/utils";
-import type { Message } from "ai/react";
+import type { Message as BaseMessage } from "ai/react";
 import DOMPurify from 'isomorphic-dompurify';
+
+interface Message extends BaseMessage {
+  timestamp: string;
+}
 
 export function ChatMessageBubble(props: {
   message: Message;
@@ -64,6 +68,10 @@ export function ChatMessageBubble(props: {
             </code>
           </>
         ) : null}
+
+        <div className="text-xs text-gray-500 mt-2 ml-auto">
+          {new Date(props.message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </div>
       </div>
     </div>
   );
