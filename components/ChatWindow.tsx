@@ -11,6 +11,7 @@ import React from "react";
 
 import { ChatMessageBubble } from "@/components/ChatMessageBubble";
 import { IntermediateStep } from "@/components/IntermediateStep";
+import { LoadingBubble } from "@/components/LoadingBubble";
 import { Button } from "./ui/button";
 import { ArrowDown, LoaderCircle, Paperclip } from "lucide-react";
 import { Checkbox } from "./ui/checkbox";
@@ -26,6 +27,7 @@ function ChatMessages(props: {
   sourcesForMessages: Record<string, any>;
   aiEmoji?: string;
   className?: string;
+  isLoading?: boolean;
 }) {
   const { scrollToBottom } = useStickToBottomContext();
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
@@ -75,6 +77,7 @@ function ChatMessages(props: {
           />
         );
       })}
+      {props.isLoading && <LoadingBubble />}
       <div ref={messagesEndRef} />
     </div>
   );
@@ -340,6 +343,7 @@ export function ChatWindow(props: {
             })) as ChatMessage[]}
             emptyStateComponent={props.emptyStateComponent}
             sourcesForMessages={sourcesForMessages}
+            isLoading={chat.isLoading}
           />
         )
       }
