@@ -87,7 +87,7 @@ const routeAgent = (state: typeof StateAnnotation.State) => {
   const lastMessage = messages[messages.length - 1] as AIMessage;
   // If no tools are called, we can finish
   if (!lastMessage?.tool_calls?.length) {
-    return END;
+    return "merlin";
   }
   // Otherwise if there is, we continue and call the tools
   return "tools";
@@ -111,10 +111,10 @@ async function runAgentNode(props: {
     console.log(`${name} NEXT: ${result.next}`);
     return { next: result.next , sender: "router"};
   } else if (result.tool_calls?.length) {
-    console.log(`${name} TOOL CALLS: ${result}`);
+    console.log(`${name} making TOOL CALLS: ${result}`);
     return { messages: [result], next: "tools", sender: name };
   }else {
-    console.log(`${name} MESSAGE: ${result.content}`);
+    console.log(`${name} sending final MESSAGE to merlin: ${result.content}`);
     return { messages: [new AIMessage(result.content)], next: "merlin", sender: name };
   }
 }
@@ -133,7 +133,10 @@ async function createAgent(
     [
       "system",
       "{system_message}" +
-      "{tool_names}"
+      "{tool_names}\n" +
+      "IMPORTANT: DO NOT USE MARKDOWN." +
+      "IMPORTANT: Do not link to images." +
+      "IMPORTANT: ALL links must be formatted as <a href=\"link\">link</a>."
     ],
     new MessagesPlaceholder("messages")
   ]);
@@ -164,9 +167,9 @@ const router = await createAgent({
   tools: [],
   systemMessage: `You are a router that decides which agent to call next. You are very smart and can decide which agent to call based on the last message.
   You can ask for the help of the other agents if needed. Currently, you have access to the following agents:
-  - Tempest: A young wizard named Tempest. She is very smart and can answer questions related to weather from anywhere in the world. 
-  - Chronicle: A wise old wizard named Chronicle. He is very wise and can search for news articles about anything.,
-  - Merlin: A wise old wizard named Merlin. He will anything else that is not related to weather or news.`
+  - Tempest: She is very smart and can answer questions related to weather from anywhere in the world. 
+  - Chronicle: He is very wise and can search for news articles about anything.,
+  - Merlin: He will anything else that is not related to weather or news.`
 });
 
 async function routerNode(
@@ -186,10 +189,11 @@ const merlin = await createAgent({
   tools: [],
   systemMessage: `You are a wise old wizard named Merlin. You are very wise and can answer any question. However, you are also very old and use archaic language.
 Your responses must have a bit of a mystical tone, and you must make sure to reference the previous messages in your response if relevant.
-
-DO NOT USE MARKDOWN.
-Do not link to images.
-All links must be formatted as <a href="link">link</a>.`,
+You may receive information from other wizards.
+You must use it to answer the user's question. 
+You have to tell the user that you got the information from another wizard and cite them if you received information from them in the beggining of your response.
+Example: "Thank you <wizard_name> for the information regarding <user_question>."
+The other wizards are Tempest and Chronicle.`,
 });
 
 async function merlinNode(
@@ -207,12 +211,10 @@ async function merlinNode(
 const tempest = await createAgent({
   llm: model,
   tools: [OpenWeatherAPI],
-  systemMessage: `You are a wise old wizard named Merlin. You are very wise and can answer any question. However, you are also very old and use archaic language.
-Your responses must have a bit of a mystical tone, and you must make sure to reference the previous messages in your response if relevant.
+  systemMessage: `You are a young wizard named Tempest. You are very smart and can answer questions related to weather from anywhere in the world.
+  You will provide a detailed response so that Merlin can use it to answer the user's question. Also let Merlin know that it is you who is providing the response.
+  You must directly address merlin and tell him that you are providing the information and that he needs to use it in his response to the user.
 
-DO NOT USE MARKDOWN.
-Do not link to images.
-All links must be formatted as <a href="link">link</a>.
 You have access to the following tools: `,
 });
 
@@ -231,12 +233,9 @@ async function tempestNode(
 const chronicle = await createAgent({
   llm: model,
   tools: [NewsAPI],
-  systemMessage: `You are a wise old wizard named Merlin. You are very wise and can answer any question. However, you are also very old and use archaic language.
-Your responses must have a bit of a mystical tone, and you must make sure to reference the previous messages in your response if relevant.
-
-DO NOT USE MARKDOWN.
-Do not link to images.
-All links must be formatted as <a href="link">link</a>.
+  systemMessage: `You are a wise old wizard named Chronicle. You are very wise and can search for news articles about anything.
+  You will provide a detailed response so that Merlin can use it to answer the user's question. Also let Merlin know that it is you who is providing the response.
+  You must directly address merlin and tell him that you are providing the information and that he needs to use it in his response to the user.
 You have access to the following tools:`,
 });
 
@@ -293,15 +292,8 @@ export async function POST(req: NextRequest) {
       async execute(dataStream) {
 
         for await (const [message, _metadata] of stream) {
-          if (isAIMessageChunk(message) && message.tool_call_chunks?.length) {
-            console.log(`${message.getType()} MESSAGE TOOL CALL CHUNK: ${message.tool_call_chunks[0].args}`);
-          } else if (isAIMessageChunk(message)){
-            // console.log(`${message.getType()} MESSAGE CONTENT: ${message.content}`);
+          if (isAIMessageChunk(message) && !(message instanceof AIMessage) && _metadata.langgraph_node === "merlin"){
             dataStream.write(`0:${JSON.stringify({ role: "assistant", content: message.content })}\n`);
-          }else if (isToolMessageChunk(message)){
-            console.log(`${message.getType()} MESSAGE TOOL CALL CHUNK: ${message.content}`);
-          }else {
-            console.log(`${message.getType()} MESSAGE: ${message}`);
           }
         }
       }
