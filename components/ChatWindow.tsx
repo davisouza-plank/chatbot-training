@@ -83,6 +83,7 @@ function ChatMessages(props: {
 export function ChatInput(props: {
   onSubmit: (e: FormEvent<HTMLFormElement>) => void;
   onStop?: () => void;
+  onClear?: () => void;
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   loading?: boolean;
@@ -115,7 +116,17 @@ export function ChatInput(props: {
         />
 
         <div className="flex justify-between ml-4 mr-2 mb-2">
-          <div className="flex gap-3">{props.children}</div>
+          <div className="flex gap-3">
+            {props.children}
+            <Button 
+              type="button" 
+              variant="destructive" 
+              onClick={props.onClear}
+              className="self-end"
+            >
+              Clear History
+            </Button>
+          </div>
 
           <div className="flex gap-2 self-end">
             {props.actions}
@@ -203,12 +214,6 @@ export function ChatWindow(props: {
   showIntermediateStepsToggle?: boolean;
   headers?: Record<string, string>;
 }) {
-  const [showIntermediateSteps, setShowIntermediateSteps] = useState(
-    !!props.showIntermediateStepsToggle,
-  );
-  const [intermediateStepsLoading, setIntermediateStepsLoading] =
-    useState(false);
-
   const [sourcesForMessages, setSourcesForMessages] = useState<
     Record<string, any>
   >({});
@@ -304,10 +309,9 @@ export function ChatWindow(props: {
       }),
   });
 
-
   async function sendMessage(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (chat.isLoading || intermediateStepsLoading) return;
+    if (chat.isLoading) return;
 
     try {
       chat.handleSubmit(e);
@@ -316,6 +320,11 @@ export function ChatWindow(props: {
     }
     return;
   }
+
+  const clearHistory = () => {
+    chat.setMessages([]);
+    setSourcesForMessages({});
+  };
 
   return (
     <ChatLayout
@@ -339,24 +348,10 @@ export function ChatWindow(props: {
           value={chat.input}
           onChange={chat.handleInputChange}
           onSubmit={sendMessage}
-          loading={chat.isLoading || intermediateStepsLoading}
+          onClear={clearHistory}
+          loading={chat.isLoading}
           placeholder={props.placeholder ?? "What's it like to be a pirate?"}
         >
-
-          {props.showIntermediateStepsToggle && (
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="show_intermediate_steps"
-                name="show_intermediate_steps"
-                checked={showIntermediateSteps}
-                disabled={chat.isLoading || intermediateStepsLoading}
-                onCheckedChange={(e) => setShowIntermediateSteps(!!e)}
-              />
-              <label htmlFor="show_intermediate_steps" className="text-sm">
-                Show intermediate steps
-              </label>
-            </div>
-          )}
         </ChatInput>
       }
     />
