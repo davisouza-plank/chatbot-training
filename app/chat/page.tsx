@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { ChatWindow } from '@/components/ChatWindow'
 import { ConversationSidebar } from '@/components/ConversationSidebar'
@@ -11,8 +11,6 @@ export default function ChatPage() {
   const supabase = createClient()
   const [authHeader, setAuthHeader] = useState<string>('')
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const conversationId = searchParams.get('id')
 
   useEffect(() => {
     const getSession = async () => {
@@ -23,6 +21,23 @@ export default function ChatPage() {
     }
     getSession()
   }, [supabase.auth])
+
+  if (!authHeader) {
+    return <div className="flex h-[calc(100vh-4rem)] items-center justify-center">Loading...</div>
+  }
+
+  return (
+    <Suspense fallback={<div className="flex h-[calc(100vh-4rem)] items-center justify-center">Loading...</div>}>
+      <ChatPageContent authHeader={authHeader} />
+    </Suspense>
+  )
+}
+
+function ChatPageContent({ authHeader }: { authHeader: string }) {
+  const supabase = createClient()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const conversationId = searchParams.get('id')
 
   const handleConversationSelect = (id: string) => {
     router.push(`/chat?id=${id}`)
@@ -58,10 +73,6 @@ export default function ChatPage() {
     if (!conversationId) {
       router.push(`/chat?id=${id}`)
     }
-  }
-
-  if (!authHeader) {
-    return <div className="flex h-[calc(100vh-4rem)] items-center justify-center">Loading...</div>
   }
 
   return (
