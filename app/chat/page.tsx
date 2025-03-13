@@ -30,8 +30,8 @@ export default function ChatPage() {
           endpoint="/api/chat/multi"
           emptyStateComponent={
             <div className="text-center">
-              <h1 className="text-2xl font-bold mb-4">Welcome to the Chat!</h1>
-              <p>Start a conversation by typing a message below.</p>
+              <h1 className="font-cryuncial text-3xl font-bold mb-4">Welcome to the Inner Chambers!</h1>
+              <p className="font-unzialish text-xl">Start a conversation by typing a message below</p>
             </div>
           }
           placeholder="How's the weather in San Francisco?"

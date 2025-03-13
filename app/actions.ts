@@ -8,14 +8,15 @@ import { redirect } from "next/navigation";
 export const signUpAction = async (formData: FormData) => {
   const email = formData.get("email")?.toString();
   const password = formData.get("password")?.toString();
+  const name = formData.get("name")?.toString();
   const supabase = await createClient();
   const origin = (await headers()).get("origin");
 
-  if (!email || !password) {
+  if (!email || !password || !name) {
     return encodedRedirect(
       "error",
       "/sign-up",
-      "Email and password are required",
+      "Email, password and name are required",
     );
   }
 
@@ -24,6 +25,9 @@ export const signUpAction = async (formData: FormData) => {
     password,
     options: {
       emailRedirectTo: `${origin}/auth/callback`,
+      data: {
+        name: name,
+      },
     },
   });
 
@@ -39,9 +43,8 @@ export const signUpAction = async (formData: FormData) => {
       {
         id: data.user?.id,
         email: data.user?.email,
+        name: name,
         created_at: new Date().toISOString(),
-        // Add any additional user fields you need here
-        // For example: name, avatar_url, preferences, etc.
       }
     ]);
 
