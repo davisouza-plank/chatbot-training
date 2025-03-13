@@ -38,6 +38,42 @@ function ChatPageContent({ authHeader }: { authHeader: string }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const conversationId = searchParams.get('id')
+  const [conversations, setConversations] = useState<Array<{
+    id: string;
+    user_uuid: string;
+    messages: any[];
+    created_at: string;
+    updated_at: string;
+  }>>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  // Fetch initial conversations
+  useEffect(() => {
+    const fetchConversations = async () => {
+      setIsLoading(true)
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        setIsLoading(false)
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('user_uuid', session.user.id)
+        .order('updated_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching conversations:', error);
+        toast.error('Failed to load conversations');
+      } else {
+        setConversations(data || []);
+      }
+      setIsLoading(false);
+    };
+
+    fetchConversations();
+  }, [supabase]);
 
   const handleConversationSelect = (id: string) => {
     router.push(`/chat?id=${id}`)
@@ -65,14 +101,26 @@ function ChatPageContent({ authHeader }: { authHeader: string }) {
     }
 
     if (data) {
+      // Update local state immediately
+      setConversations(prev => [data, ...prev]);
       router.push(`/chat?id=${data.id}`)
     }
   }
 
-  const handleConversationCreated = (id: string) => {
+  const handleConversationCreated = (id: string, conversation: any) => {
     if (!conversationId) {
-      router.push(`/chat?id=${id}`)
+      router.push(`/chat?id=${id}`);
     }
+    // Update conversations list immediately
+    setConversations(prev => [conversation, ...prev]);
+  }
+
+  const handleConversationUpdated = (updatedConversation: any) => {
+    setConversations(prev => 
+      prev.map(conv => 
+        conv.id === updatedConversation.id ? updatedConversation : conv
+      ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+    );
   }
 
   return (
@@ -81,6 +129,9 @@ function ChatPageContent({ authHeader }: { authHeader: string }) {
         currentConversationId={conversationId || undefined}
         onConversationSelect={handleConversationSelect}
         onNewConversation={handleNewConversation}
+        conversations={conversations}
+        setConversations={setConversations}
+        isLoading={isLoading}
       />
       <div className="flex-1 pr-20">
         <div className="h-full relative">
@@ -101,6 +152,7 @@ function ChatPageContent({ authHeader }: { authHeader: string }) {
                 'X-Conversation-Id': conversationId || ''
               }}
               onConversationCreated={handleConversationCreated}
+              onConversationUpdated={handleConversationUpdated}
             />
           </div>
         </div>

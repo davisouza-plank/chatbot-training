@@ -270,7 +270,8 @@ export function ChatWindow(props: {
   showIngestForm?: boolean;
   showIntermediateStepsToggle?: boolean;
   headers?: Record<string, string>;
-  onConversationCreated?: (id: string) => void;
+  onConversationCreated?: (id: string, conversation: any) => void;
+  onConversationUpdated?: (conversation: any) => void;
 }) {
   const [sourcesForMessages, setSourcesForMessages] = useState<
     Record<string, any>
@@ -406,18 +407,22 @@ export function ChatWindow(props: {
 
     if (conversationId) {
       // Update existing conversation
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('conversations')
         .upsert({
           id: conversationId,
           user_uuid: session.user.id,
           messages: messagesWithTimestamp,
           updated_at: new Date().toISOString()
-        });
+        })
+        .select()
+        .single();
 
       if (error) {
         console.error('Error saving conversation:', error);
         toast.error('Failed to save conversation');
+      } else if (data && props.onConversationUpdated) {
+        props.onConversationUpdated(data);
       }
     } else if (messages.length > 0) {
       // Create new conversation only if there are messages
@@ -440,7 +445,7 @@ export function ChatWindow(props: {
           props.headers['X-Conversation-Id'] = data.id;
         }
         // Notify parent component about the new conversation
-        props.onConversationCreated?.(data.id);
+        props.onConversationCreated?.(data.id, data);
       }
     }
   };
@@ -479,7 +484,7 @@ export function ChatWindow(props: {
             props.headers['X-Conversation-Id'] = data.id;
           }
           // Notify parent about new conversation
-          props.onConversationCreated?.(data.id);
+          props.onConversationCreated?.(data.id, data);
         }
       }
 
