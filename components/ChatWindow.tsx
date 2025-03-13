@@ -120,7 +120,7 @@ export function ChatInput(props: {
           className="font-alchemist border-none outline-none bg-transparent p-4"
         />
 
-        <div className="flex justify-between ml-4 mr-2 mb-2">
+        <div className="flex justify-between ml-2 mr-2 mb-2">
           <div className="flex gap-3">
             {props.children}
             <Button 
@@ -218,13 +218,26 @@ export function ChatWindow(props: {
   showIngestForm?: boolean;
   showIntermediateStepsToggle?: boolean;
   headers?: Record<string, string>;
+  onConversationCreated?: (id: string) => void;
 }) {
   const [sourcesForMessages, setSourcesForMessages] = useState<
     Record<string, any>
   >({});
 
+  // Save conversation when component unmounts or conversation ID changes
+  useEffect(() => {
+    const currentId = props.headers?.['X-Conversation-Id'] || '';
+    
+    // Only save if we have messages and we're changing to a different conversation
+    if (chat.messages.length > 0) {
+      saveConversation(currentId, chat.messages);
+    }
+  }, [props.headers?.['X-Conversation-Id']]);
+
   const chat = useChat({
     api: props.endpoint,
+    id: props.headers?.['X-Conversation-Id'], // Add this to reset chat state when ID changes
+    initialMessages: [],
     onResponse(response) {
       const sourcesHeader = response.headers.get("x-sources");
       const sources = sourcesHeader
@@ -329,7 +342,7 @@ export function ChatWindow(props: {
   const saveConversation = async (conversationId: string, messages: Message[]) => {
     const supabase = createClient();
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
+    if (!session || messages.length === 0) return;
 
     const messagesWithTimestamp = messages.map(msg => ({
       ...msg,
@@ -351,8 +364,8 @@ export function ChatWindow(props: {
         console.error('Error saving conversation:', error);
         toast.error('Failed to save conversation');
       }
-    } else {
-      // Create new conversation
+    } else if (messages.length > 0) {
+      // Create new conversation only if there are messages
       const { data, error } = await supabase
         .from('conversations')
         .insert({
@@ -367,8 +380,12 @@ export function ChatWindow(props: {
         console.error('Error creating conversation:', error);
         toast.error('Failed to create conversation');
       } else if (data) {
-        // Update the URL with the new conversation ID
-        window.history.pushState({}, '', `/chat?id=${data.id}`);
+        // Update the conversation ID in the headers
+        if (props.headers) {
+          props.headers['X-Conversation-Id'] = data.id;
+        }
+        // Notify parent component about the new conversation
+        props.onConversationCreated?.(data.id);
       }
     }
   };
@@ -378,6 +395,39 @@ export function ChatWindow(props: {
     if (chat.isLoading) return;
 
     try {
+      // If we don't have a conversation ID, create one first
+      if (!props.headers?.['X-Conversation-Id']) {
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        // Create new empty conversation
+        const { data, error } = await supabase
+          .from('conversations')
+          .insert({
+            user_uuid: session.user.id,
+            messages: [],
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Error creating new conversation:', error);
+          toast.error('Failed to create new conversation');
+          return;
+        }
+
+        if (data) {
+          // Update headers with new conversation ID
+          if (props.headers) {
+            props.headers['X-Conversation-Id'] = data.id;
+          }
+          // Notify parent about new conversation
+          props.onConversationCreated?.(data.id);
+        }
+      }
+
       chat.handleSubmit(e);
     } catch (error) {
       console.error("Error sending message:", error);

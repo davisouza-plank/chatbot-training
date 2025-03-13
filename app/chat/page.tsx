@@ -5,6 +5,7 @@ import { createClient } from '@/utils/supabase/client'
 import { ChatWindow } from '@/components/ChatWindow'
 import { ConversationSidebar } from '@/components/ConversationSidebar'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { toast } from 'sonner'
 
 export default function ChatPage() {
   const supabase = createClient()
@@ -27,8 +28,36 @@ export default function ChatPage() {
     router.push(`/chat?id=${id}`)
   }
 
-  const handleNewConversation = () => {
-    router.push('/chat')
+  const handleNewConversation = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return;
+
+    // Create new empty conversation
+    const { data, error } = await supabase
+      .from('conversations')
+      .insert({
+        user_uuid: session.user.id,
+        messages: [],
+        updated_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating new conversation:', error);
+      toast.error('Failed to create new conversation');
+      return;
+    }
+
+    if (data) {
+      router.push(`/chat?id=${data.id}`)
+    }
+  }
+
+  const handleConversationCreated = (id: string) => {
+    if (!conversationId) {
+      router.push(`/chat?id=${id}`)
+    }
   }
 
   if (!authHeader) {
@@ -46,6 +75,7 @@ export default function ChatPage() {
         <div className="h-full relative">
           <div className="absolute inset-0 overflow-hidden">
             <ChatWindow
+              key={conversationId || 'new'}
               endpoint="/api/chat/multi"
               emptyStateComponent={
                 <div className="text-center">
@@ -59,6 +89,7 @@ export default function ChatPage() {
                 'Authorization': authHeader,
                 'X-Conversation-Id': conversationId || ''
               }}
+              onConversationCreated={handleConversationCreated}
             />
           </div>
         </div>

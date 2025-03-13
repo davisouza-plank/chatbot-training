@@ -95,6 +95,7 @@ export function ConversationSidebar({
       toast.error('Failed to delete conversation');
       return;
     }
+    setConversations(conversations.filter(c => c.id !== id));
 
     toast.success('Conversation deleted');
   };
