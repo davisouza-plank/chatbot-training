@@ -25,45 +25,34 @@ interface Conversation {
 export function ConversationSidebar({ 
   currentConversationId,
   onConversationSelect,
-  onNewConversation
+  onNewConversation,
+  conversations,
+  setConversations,
+  isLoading
 }: { 
   currentConversationId?: string;
   onConversationSelect: (id: string) => void;
   onNewConversation: () => void;
+  conversations: Array<{
+    id: string;
+    user_uuid: string;
+    messages: ChatMessage[];
+    created_at: string;
+    updated_at: string;
+  }>;
+  setConversations: React.Dispatch<React.SetStateAction<Array<{
+    id: string;
+    user_uuid: string;
+    messages: ChatMessage[];
+    created_at: string;
+    updated_at: string;
+  }>>>;
+  isLoading: boolean;
 }) {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const supabase = createClient();
 
   useEffect(() => {
-    const fetchConversations = async () => {
-      setIsLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        setIsLoading(false);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('conversations')
-        .select('*')
-        .eq('user_uuid', session.user.id)
-        .order('updated_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching conversations:', error);
-        toast.error('Failed to load conversations');
-        setIsLoading(false);
-        return;
-      }
-
-      setConversations(data || []);
-      setIsLoading(false);
-    };
-
-    fetchConversations();
-
-    // Subscribe to changes
+    // Subscribe to changes for real-time updates
     const channel = supabase
       .channel('conversations_changes')
       .on(
@@ -73,8 +62,37 @@ export function ConversationSidebar({
           schema: 'public',
           table: 'conversations'
         },
-        () => {
-          fetchConversations();
+        async (payload) => {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) return;
+
+          // Handle deletion
+          if (payload.eventType === 'DELETE') {
+            setConversations(prev => prev.filter(conv => conv.id !== payload.old.id));
+            return;
+          }
+
+          // Handle inserts and updates
+          const { data } = await supabase
+            .from('conversations')
+            .select('*')
+            .eq('id', payload.new.id)
+            .single();
+
+          if (data) {
+            setConversations(prev => {
+              const existing = prev.find(c => c.id === data.id);
+              if (!existing) {
+                // New conversation
+                return [data, ...prev];
+              } else {
+                // Updated conversation
+                return prev
+                  .map(c => c.id === data.id ? data : c)
+                  .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+              }
+            });
+          }
         }
       )
       .subscribe();
@@ -82,7 +100,7 @@ export function ConversationSidebar({
     return () => {
       channel.unsubscribe();
     };
-  }, [supabase]);
+  }, [supabase, setConversations]);
 
   const deleteConversation = async (id: string) => {
     const { error } = await supabase
@@ -95,8 +113,7 @@ export function ConversationSidebar({
       toast.error('Failed to delete conversation');
       return;
     }
-    setConversations(conversations.filter(c => c.id !== id));
-
+    setConversations(prev => prev.filter(c => c.id !== id));
     toast.success('Conversation deleted');
   };
 

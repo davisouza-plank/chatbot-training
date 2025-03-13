@@ -270,25 +270,16 @@ export function ChatWindow(props: {
   showIngestForm?: boolean;
   showIntermediateStepsToggle?: boolean;
   headers?: Record<string, string>;
-  onConversationCreated?: (id: string) => void;
+  onConversationCreated?: (id: string, conversation: any) => void;
+  onConversationUpdated?: (conversation: any) => void;
 }) {
   const [sourcesForMessages, setSourcesForMessages] = useState<
     Record<string, any>
   >({});
 
-  // Save conversation when component unmounts or conversation ID changes
-  useEffect(() => {
-    const currentId = props.headers?.['X-Conversation-Id'] || '';
-    
-    // Only save if we have messages and we're changing to a different conversation
-    if (chat.messages.length > 0) {
-      saveConversation(currentId, chat.messages);
-    }
-  }, [props.headers?.['X-Conversation-Id']]);
-
   const chat = useChat({
     api: props.endpoint,
-    id: props.headers?.['X-Conversation-Id'], // Add this to reset chat state when ID changes
+    id: props.headers?.['X-Conversation-Id'],
     initialMessages: [],
     onResponse(response) {
       const sourcesHeader = response.headers.get("x-sources");
@@ -327,7 +318,7 @@ export function ChatWindow(props: {
                     if (lastMessage && 
                         lastMessage.role === update.role && 
                         lastMessage.name === update.name) {
-                      return [
+                      const newMessages = [
                         ...messages.slice(0, -1),
                         {
                           ...lastMessage,
@@ -335,9 +326,12 @@ export function ChatWindow(props: {
                           timestamp: new Date().toISOString()
                         }
                       ];
+                      // Save messages immediately after update
+                      saveConversation(props.headers?.['X-Conversation-Id'] || '', newMessages);
+                      return newMessages;
                     }
                     // Create new message if role or name is different
-                    return [
+                    const newMessages = [
                       ...messages,
                       {
                         ...update,
@@ -346,6 +340,9 @@ export function ChatWindow(props: {
                         content: update.content || ''
                       }
                     ];
+                    // Save messages immediately after update
+                    saveConversation(props.headers?.['X-Conversation-Id'] || '', newMessages);
+                    return newMessages;
                   });
                 } catch (e) {
                   console.error("Error parsing stream chunk:", e);
@@ -391,6 +388,13 @@ export function ChatWindow(props: {
       }),
   });
 
+  // Add effect to save messages whenever they change
+  useEffect(() => {
+    if (chat.messages.length > 0) {
+      saveConversation(props.headers?.['X-Conversation-Id'] || '', chat.messages);
+    }
+  }, [chat.messages, props.headers]);
+
   const saveConversation = async (conversationId: string, messages: Message[]) => {
     const supabase = createClient();
     const { data: { session } } = await supabase.auth.getSession();
@@ -403,18 +407,22 @@ export function ChatWindow(props: {
 
     if (conversationId) {
       // Update existing conversation
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('conversations')
         .upsert({
           id: conversationId,
           user_uuid: session.user.id,
           messages: messagesWithTimestamp,
           updated_at: new Date().toISOString()
-        });
+        })
+        .select()
+        .single();
 
       if (error) {
         console.error('Error saving conversation:', error);
         toast.error('Failed to save conversation');
+      } else if (data && props.onConversationUpdated) {
+        props.onConversationUpdated(data);
       }
     } else if (messages.length > 0) {
       // Create new conversation only if there are messages
@@ -437,7 +445,7 @@ export function ChatWindow(props: {
           props.headers['X-Conversation-Id'] = data.id;
         }
         // Notify parent component about the new conversation
-        props.onConversationCreated?.(data.id);
+        props.onConversationCreated?.(data.id, data);
       }
     }
   };
@@ -476,7 +484,7 @@ export function ChatWindow(props: {
             props.headers['X-Conversation-Id'] = data.id;
           }
           // Notify parent about new conversation
-          props.onConversationCreated?.(data.id);
+          props.onConversationCreated?.(data.id, data);
         }
       }
 
