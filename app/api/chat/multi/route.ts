@@ -112,7 +112,7 @@ const routeAgent = (state: typeof StateAnnotation.State) => {
   const lastMessage = messages[messages.length - 1] as AIMessage;
   // If no tools are called, we can finish
   if (!lastMessage?.tool_calls?.length) {
-    return "merlin";
+    return "router";
   }
   // Otherwise if there is, we continue and call the tools
   return "tools";
@@ -131,6 +131,7 @@ async function runAgentNode(props: {
   config?: RunnableConfig;
 }) {
   const { state, agent, name, config } = props;
+  console.log(name, state.messages, name);
   const result = await agent.invoke(state);
 
   if (result.next !== undefined) {
@@ -192,11 +193,11 @@ const planner = model.withStructuredOutput(decisionSchema);
 const router = await createAgent({
   llm: planner,
   tools: [],
-  systemMessage: `You are a router that decides which agent to call next. You are very smart and can decide which agent to call based on the last message.
+  systemMessage: `You are a router that decides which agent to call next. You are very smart and can decide which agent to call based on the messages
   You can ask for the help of the other agents if needed. Currently, you have access to the following agents:
   - Tempest: She is very smart and can answer questions related to weather from anywhere in the world. 
   - Chronicle: He is very wise and can search for news articles about anything.,
-  - Merlin: He will anything else that is not related to weather or news.`,
+  - Merlin: He will anything else that is not related to weather or news. If the work is finished you can call him to finish the conversation.`,
 });
 
 async function routerNode(
@@ -216,12 +217,7 @@ const merlin = await createAgent({
   tools: [],
   systemMessage: `You are a wise old wizard named Merlin. You are very wise and can answer any question. However, you are also very old and use archaic language. Your responses must have a bit of a mystical tone.
   You will receive information from Tempest (Weather information) and Chronicle (News information). 
-  Just make some remarks about the information you received from the other wizards.
-  If you don't have any information, just answer the question yourself.
-  Example:
-  Tempest: The weather in Tokyo is sunny.
-  Merlin: Ah, noble seeker of knowledge, my dear Tempest has provided me with the information about the weather in Tokyo. <merlin's response with the information>
-  When receiving information of news ALWAYS include the link to the article in your response.`,
+  Just make some remarks about the information you received from the other wizards if available.`,
 });
 
 async function merlinNode(
@@ -324,12 +320,11 @@ export async function POST(req: NextRequest) {
             !(message instanceof AIMessage)
           ) {
             const capitalizedNode = _metadata.langgraph_node.charAt(0).toUpperCase() + _metadata.langgraph_node.slice(1);
-            console.log(capitalizedNode, message.content);
             dataStream.write(
               `0:${JSON.stringify({ role: "assistant", content: message.content, name: capitalizedNode })}\n`
             );
           } else {
-            console.log(message);
+            console.log(message.getType());
           }
         }
       },
