@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 import type { ToolInvocationUIPart } from "@ai-sdk/ui-utils";
 import React from "react";
+import { createClient } from '@/utils/supabase/client';
 
 import { ChatMessageBubble } from "@/components/ChatMessageBubble";
 import { IntermediateStep } from "@/components/IntermediateStep";
@@ -19,6 +20,7 @@ import { cn } from "@/lib/utils";
 
 interface ChatMessage extends Message {
     timestamp: string;
+    name?: string;
 }
 
 function ChatMessages(props: {
@@ -96,6 +98,45 @@ export function ChatInput(props: {
   actions?: ReactNode;
 }) {
   const disabled = props.loading && props.onStop == null;
+  const [isRecording, setIsRecording] = useState(false);
+
+  const startVoiceRecognition = () => {
+    if (!('webkitSpeechRecognition' in window)) {
+      toast.error('Speech recognition is not supported in your browser');
+      return;
+    }
+
+    const recognition = new (window as any).webkitSpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsRecording(true);
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      // Create a synthetic event to update the input
+      const syntheticEvent = {
+        target: { value: props.value + transcript }
+      } as React.ChangeEvent<HTMLInputElement>;
+      props.onChange(syntheticEvent);
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      setIsRecording(false);
+      toast.error('Error recording voice input');
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+
+    recognition.start();
+  };
+
   return (
     <form
       onSubmit={(e) => {
@@ -115,17 +156,17 @@ export function ChatInput(props: {
           value={props.value}
           placeholder={props.placeholder}
           onChange={props.onChange}
-          className="border-none outline-none bg-transparent p-4"
+          className="font-alchemist border-none outline-none bg-transparent p-4"
         />
 
-        <div className="flex justify-between ml-4 mr-2 mb-2">
+        <div className="flex justify-between ml-2 mr-2 mb-2">
           <div className="flex gap-3">
             {props.children}
             <Button 
               type="button" 
               variant="destructive" 
               onClick={props.onClear}
-              className="self-end"
+              className="self-end font-alchemist text-xl"
             >
               Clear History
             </Button>
@@ -133,6 +174,19 @@ export function ChatInput(props: {
 
           <div className="flex gap-2 self-end">
             {props.actions}
+            <Button 
+              type="button"
+              onClick={startVoiceRecognition}
+              className={cn(
+                "self-end",
+                isRecording && "bg-red-500 hover:bg-red-600"
+              )}
+              disabled={disabled || isRecording}
+            >
+              <span className="font-alchemist text-xl">
+                {isRecording ? "Scribing Sound" : "🗣️"}
+              </span>
+            </Button>
             <Button type="submit" className="self-end" disabled={disabled}>
               {props.loading ? (
                 <span role="status" className="flex justify-center">
@@ -140,7 +194,7 @@ export function ChatInput(props: {
                   <span className="sr-only">Loading...</span>
                 </span>
               ) : (
-                <span>Send</span>
+                <span className="font-alchemist text-xl">Send</span>
               )}
             </Button>
           </div>
@@ -216,13 +270,26 @@ export function ChatWindow(props: {
   showIngestForm?: boolean;
   showIntermediateStepsToggle?: boolean;
   headers?: Record<string, string>;
+  onConversationCreated?: (id: string) => void;
 }) {
   const [sourcesForMessages, setSourcesForMessages] = useState<
     Record<string, any>
   >({});
 
+  // Save conversation when component unmounts or conversation ID changes
+  useEffect(() => {
+    const currentId = props.headers?.['X-Conversation-Id'] || '';
+    
+    // Only save if we have messages and we're changing to a different conversation
+    if (chat.messages.length > 0) {
+      saveConversation(currentId, chat.messages);
+    }
+  }, [props.headers?.['X-Conversation-Id']]);
+
   const chat = useChat({
     api: props.endpoint,
+    id: props.headers?.['X-Conversation-Id'], // Add this to reset chat state when ID changes
+    initialMessages: [],
     onResponse(response) {
       const sourcesHeader = response.headers.get("x-sources");
       const sources = sourcesHeader
@@ -252,12 +319,14 @@ export function ChatWindow(props: {
               for (const match of matches) {
                 try {
                   const jsonContent = match[1];
-                  const update = JSON.parse(jsonContent);
+                  const update = JSON.parse(jsonContent) as ChatMessage;
                   
                   // Update the last message with the new content
                   chat.setMessages(messages => {
-                    const lastMessage = messages[messages.length - 1];
-                    if (lastMessage && lastMessage.role === update.role) {
+                    const lastMessage = messages[messages.length - 1] as ChatMessage;
+                    if (lastMessage && 
+                        lastMessage.role === update.role && 
+                        lastMessage.name === update.name) {
                       return [
                         ...messages.slice(0, -1),
                         {
@@ -267,12 +336,14 @@ export function ChatWindow(props: {
                         }
                       ];
                     }
+                    // Create new message if role or name is different
                     return [
                       ...messages,
                       {
                         ...update,
                         id: messages.length.toString(),
-                        timestamp: new Date().toISOString()
+                        timestamp: new Date().toISOString(),
+                        content: update.content || ''
                       }
                     ];
                   });
@@ -303,7 +374,15 @@ export function ChatWindow(props: {
           ...message,
           timestamp: new Date().toISOString()
         };
-        chat.setMessages([...chat.messages.slice(0, -1), messageWithTimestamp]);
+        chat.setMessages(prevMessages => {
+          const newMessages = [...prevMessages.slice(0, -1), messageWithTimestamp];
+          // Save conversation after updating messages
+          saveConversation(props.headers?.['X-Conversation-Id'] || '', newMessages);
+          return newMessages;
+        });
+      } else {
+        // Save conversation even if message already has timestamp
+        saveConversation(props.headers?.['X-Conversation-Id'] || '', chat.messages);
       }
     },
     onError: (e) =>
@@ -312,21 +391,108 @@ export function ChatWindow(props: {
       }),
   });
 
+  const saveConversation = async (conversationId: string, messages: Message[]) => {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session || messages.length === 0) return;
+
+    const messagesWithTimestamp = messages.map(msg => ({
+      ...msg,
+      timestamp: (msg as ChatMessage).timestamp || new Date().toISOString()
+    }));
+
+    if (conversationId) {
+      // Update existing conversation
+      const { error } = await supabase
+        .from('conversations')
+        .upsert({
+          id: conversationId,
+          user_uuid: session.user.id,
+          messages: messagesWithTimestamp,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) {
+        console.error('Error saving conversation:', error);
+        toast.error('Failed to save conversation');
+      }
+    } else if (messages.length > 0) {
+      // Create new conversation only if there are messages
+      const { data, error } = await supabase
+        .from('conversations')
+        .insert({
+          user_uuid: session.user.id,
+          messages: messagesWithTimestamp,
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating conversation:', error);
+        toast.error('Failed to create conversation');
+      } else if (data) {
+        // Update the conversation ID in the headers
+        if (props.headers) {
+          props.headers['X-Conversation-Id'] = data.id;
+        }
+        // Notify parent component about the new conversation
+        props.onConversationCreated?.(data.id);
+      }
+    }
+  };
+
   async function sendMessage(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (chat.isLoading) return;
 
     try {
+      // If we don't have a conversation ID, create one first
+      if (!props.headers?.['X-Conversation-Id']) {
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        // Create new empty conversation
+        const { data, error } = await supabase
+          .from('conversations')
+          .insert({
+            user_uuid: session.user.id,
+            messages: [],
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Error creating new conversation:', error);
+          toast.error('Failed to create new conversation');
+          return;
+        }
+
+        if (data) {
+          // Update headers with new conversation ID
+          if (props.headers) {
+            props.headers['X-Conversation-Id'] = data.id;
+          }
+          // Notify parent about new conversation
+          props.onConversationCreated?.(data.id);
+        }
+      }
+
       chat.handleSubmit(e);
     } catch (error) {
       console.error("Error sending message:", error);
     }
-    return;
   }
 
   const clearHistory = () => {
     chat.setMessages([]);
     setSourcesForMessages({});
+    // If we have a conversation ID, update it to empty in Supabase
+    if (props.headers?.['X-Conversation-Id']) {
+      saveConversation(props.headers['X-Conversation-Id'], []);
+    }
   };
 
   return (
