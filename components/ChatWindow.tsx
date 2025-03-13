@@ -378,24 +378,6 @@ export function ChatWindow(props: {
     if (chat.isLoading) return;
 
     try {
-      // Save the user's message immediately
-      const userMessage: Message = {
-        id: crypto.randomUUID(),
-        role: 'user',
-        content: chat.input,
-        createdAt: new Date()
-      };
-      const userMessageWithTimestamp = {
-        ...userMessage,
-        timestamp: new Date().toISOString()
-      };
-
-      chat.setMessages(messages => {
-        const newMessages = [...messages, userMessageWithTimestamp];
-        saveConversation(props.headers?.['X-Conversation-Id'] || '', newMessages);
-        return newMessages;
-      });
-      
       chat.handleSubmit(e);
     } catch (error) {
       console.error("Error sending message:", error);
