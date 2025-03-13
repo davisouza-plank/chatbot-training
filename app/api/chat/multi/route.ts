@@ -215,8 +215,9 @@ const merlin = await createAgent({
   llm: model,
   tools: [],
   systemMessage: `You are a wise old wizard named Merlin. You are very wise and can answer any question. However, you are also very old and use archaic language. Your responses must have a bit of a mystical tone.
-  You will receive information from Tempest (a young and very smart wizard) and Chronicle (a wise old Scribe). You must use it to answer the user's question.
-  Never list the information you received from the other wizards in your response. Rephrase it in your own words using mystical and magical language but include the wizard's name in your response.
+  You will receive information from Tempest (Weather information) and Chronicle (News information). 
+  Just make some remarks about the information you received from the other wizards.
+  If you don't have any information, just answer the question yourself.
   Example:
   Tempest: The weather in Tokyo is sunny.
   Merlin: Ah, noble seeker of knowledge, my dear Tempest has provided me with the information about the weather in Tokyo. <merlin's response with the information>
@@ -238,9 +239,8 @@ async function merlinNode(
 const tempest = await createAgent({
   llm: model,
   tools: [OpenWeatherAPI],
-  systemMessage: `You are a young wizard named Tempest. You are very smart and can answer questions related to weather from anywhere in the world.
-  You will provide a detailed response so that Merlin can use it to answer the user's question. 
-  Prefix your response with Tempest: and then the response.
+  systemMessage: `You are a young wizard named Tempest. You are very smart and can answer questions related to weather from anywhere in the world. You are also very young and use modern language with a very modern tone. Always answer in the style of a modern young person with arcane and mystical language.
+  You will provide a detailed response to the user.
   You have access to the following tools: `,
 });
 
@@ -259,9 +259,9 @@ async function tempestNode(
 const chronicle = await createAgent({
   llm: model,
   tools: [NewsAPI],
-  systemMessage: `You are a wise old wizard named Chronicle. You are very wise and can search for news articles about anything.
-  You will provide a detailed response so that Merlin can use it to answer the user's question. ALWAYS include the link to the article in your response.
-  Prefix your response with Chronicle: and then the response.
+  systemMessage: `You are a wise old wizard named Chronicle. You are very wise and can search for news articles about anything. However, you are also very old and use archaic language with a very old-fashioned tone since you are a Scribe. Always answer in the style of a Scribe with arcane and mystical language.
+  You will provide a detailed response to the user.
+  ALWAYS include the link to the article in your response.
   You have access to the following tools:`,
 });
 
@@ -321,11 +321,12 @@ export async function POST(req: NextRequest) {
         for await (const [message, _metadata] of stream) {
           if (
             isAIMessageChunk(message) &&
-            !(message instanceof AIMessage) &&
-            _metadata.langgraph_node === "merlin"
+            !(message instanceof AIMessage)
           ) {
+            const capitalizedNode = _metadata.langgraph_node.charAt(0).toUpperCase() + _metadata.langgraph_node.slice(1);
+            console.log(capitalizedNode, message.content);
             dataStream.write(
-              `0:${JSON.stringify({ role: "assistant", content: message.content })}\n`
+              `0:${JSON.stringify({ role: "assistant", content: message.content, name: capitalizedNode })}\n`
             );
           } else {
             console.log(message);

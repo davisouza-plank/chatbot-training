@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 
 interface ChatMessage extends Message {
     timestamp: string;
+    name?: string;
 }
 
 function ChatMessages(props: {
@@ -252,12 +253,14 @@ export function ChatWindow(props: {
               for (const match of matches) {
                 try {
                   const jsonContent = match[1];
-                  const update = JSON.parse(jsonContent);
+                  const update = JSON.parse(jsonContent) as ChatMessage;
                   
                   // Update the last message with the new content
                   chat.setMessages(messages => {
-                    const lastMessage = messages[messages.length - 1];
-                    if (lastMessage && lastMessage.role === update.role) {
+                    const lastMessage = messages[messages.length - 1] as ChatMessage;
+                    if (lastMessage && 
+                        lastMessage.role === update.role && 
+                        lastMessage.name === update.name) {
                       return [
                         ...messages.slice(0, -1),
                         {
@@ -267,12 +270,14 @@ export function ChatWindow(props: {
                         }
                       ];
                     }
+                    // Create new message if role or name is different
                     return [
                       ...messages,
                       {
                         ...update,
                         id: messages.length.toString(),
-                        timestamp: new Date().toISOString()
+                        timestamp: new Date().toISOString(),
+                        content: update.content || ''
                       }
                     ];
                   });
