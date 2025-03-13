@@ -98,6 +98,45 @@ export function ChatInput(props: {
   actions?: ReactNode;
 }) {
   const disabled = props.loading && props.onStop == null;
+  const [isRecording, setIsRecording] = useState(false);
+
+  const startVoiceRecognition = () => {
+    if (!('webkitSpeechRecognition' in window)) {
+      toast.error('Speech recognition is not supported in your browser');
+      return;
+    }
+
+    const recognition = new (window as any).webkitSpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsRecording(true);
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      // Create a synthetic event to update the input
+      const syntheticEvent = {
+        target: { value: props.value + transcript }
+      } as React.ChangeEvent<HTMLInputElement>;
+      props.onChange(syntheticEvent);
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      setIsRecording(false);
+      toast.error('Error recording voice input');
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+
+    recognition.start();
+  };
+
   return (
     <form
       onSubmit={(e) => {
@@ -135,6 +174,19 @@ export function ChatInput(props: {
 
           <div className="flex gap-2 self-end">
             {props.actions}
+            <Button 
+              type="button"
+              onClick={startVoiceRecognition}
+              className={cn(
+                "self-end",
+                isRecording && "bg-red-500 hover:bg-red-600"
+              )}
+              disabled={disabled || isRecording}
+            >
+              <span className="font-alchemist text-xl">
+                {isRecording ? "Scribing Sound" : "🗣️"}
+              </span>
+            </Button>
             <Button type="submit" className="self-end" disabled={disabled}>
               {props.loading ? (
                 <span role="status" className="flex justify-center">
