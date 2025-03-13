@@ -4,7 +4,17 @@ import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import Link from "next/link";
 import "./globals.css";
-import { cryuncial, alchemist, unzialish, celticknots } from './fonts';
+import { 
+  cryuncial, 
+  alchemist, 
+  unzialish, 
+  celticknots, 
+  quillsword,
+  quickquill,
+  luminari,
+  gorckhelozat,
+  mysticora
+} from './fonts';
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -27,7 +37,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.className} ${cryuncial.variable} ${alchemist.variable} ${unzialish.variable} ${celticknots.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${geistSans.className} ${cryuncial.variable} ${alchemist.variable} ${unzialish.variable} ${celticknots.variable} ${quillsword.variable} ${quickquill.variable} ${luminari.variable} ${gorckhelozat.variable} ${mysticora.variable}`} suppressHydrationWarning>
       <body className="bg-background text-foreground">
         <ThemeProvider
           attribute="class"

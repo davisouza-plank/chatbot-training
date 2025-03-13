@@ -23,6 +23,11 @@ const config = {
         alchemist: ['var(--font-alchemist)'],
         unzialish: ['var(--font-unzialish)'],
         celticknots: ['var(--font-celticknots)'],
+        quillsword: ['var(--font-quillsword)'],
+        quickquill: ['var(--font-quickquill)'],
+        luminari: ['var(--font-luminari)'],
+        gorckhelozat: ['var(--font-gorckhelozat)'],
+        mysticora: ['var(--font-mysticora)'],
       },
       colors: {
         border: "hsl(var(--border))",
