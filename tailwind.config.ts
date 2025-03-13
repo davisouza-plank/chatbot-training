@@ -19,8 +19,10 @@ const config = {
     },
     extend: {
       fontFamily: {
-        luminari: ['var(--font-luminari)'],
+        cryuncial: ['var(--font-cryuncial)'],
         alchemist: ['var(--font-alchemist)'],
+        unzialish: ['var(--font-unzialish)'],
+        celticknots: ['var(--font-celticknots)'],
       },
       colors: {
         border: "hsl(var(--border))",

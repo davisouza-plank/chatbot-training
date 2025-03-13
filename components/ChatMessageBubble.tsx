@@ -66,7 +66,7 @@ export function ChatMessageBubble(props: {
       <div className="whitespace-pre-wrap flex flex-col">
         <span 
           className={cn(
-            props.message.role === "user" ? "font-luminari" : "font-alchemist"
+            props.message.role === "user" ? "font-alchemist" : "font-unzialish"
           )}
           dangerouslySetInnerHTML={createMarkup(props.message.content)} 
         />
@@ -95,7 +95,7 @@ export function ChatMessageBubble(props: {
           </>
         ) : null}
 
-        <div className="text-xs text-gray-500 mt-2 ml-auto">
+        <div className="text-xs text-gray-500 mt-2 ml-auto font-cryuncial">
           {new Date(props.message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </div>
       </div>

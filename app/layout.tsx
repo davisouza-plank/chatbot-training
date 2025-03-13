@@ -4,7 +4,7 @@ import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import Link from "next/link";
 import "./globals.css";
-import { luminari, alchemist } from './fonts';
+import { cryuncial, alchemist, unzialish, celticknots } from './fonts';
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -27,7 +27,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.className} ${luminari.variable} ${alchemist.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${geistSans.className} ${cryuncial.variable} ${alchemist.variable} ${unzialish.variable} ${celticknots.variable}`} suppressHydrationWarning>
       <body className="bg-background text-foreground">
         <ThemeProvider
           attribute="class"
@@ -41,7 +41,7 @@ export default function RootLayout({
                 <div className="w-full max-w-5xl flex justify-between items-center p-3 px-5 text-sm">
                   <div className="flex gap-5 items-center font-semibold">
                   <ThemeSwitcher />
-                    <Link href={"/"}>Merlin's Tower 🏰</Link>
+                    <Link className="font-celticknots text-4xl pt-2" href={"/"}>Merlin's Tower 🏰</Link>
                   </div>
                   <HeaderAuth />
                 </div>
