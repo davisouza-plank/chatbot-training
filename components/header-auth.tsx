@@ -49,8 +49,8 @@ export default async function AuthButton() {
     );
   }
   return user ? (
-    <div className="flex items-center gap-4">
-      Hey, {user.user_metadata.name || user.email}!
+    <div className="font-celticknots text-xl flex items-center gap-4">
+      Knowledge is power, {user.user_metadata.name || user.email}!
       <form action={signOutAction}>
         <Button type="submit" variant={"outline"}>
           Sign out

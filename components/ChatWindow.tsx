@@ -116,7 +116,7 @@ export function ChatInput(props: {
           value={props.value}
           placeholder={props.placeholder}
           onChange={props.onChange}
-          className="border-none outline-none bg-transparent p-4"
+          className="font-alchemist border-none outline-none bg-transparent p-4"
         />
 
         <div className="flex justify-between ml-4 mr-2 mb-2">
@@ -126,7 +126,7 @@ export function ChatInput(props: {
               type="button" 
               variant="destructive" 
               onClick={props.onClear}
-              className="self-end"
+              className="self-end font-alchemist text-xl"
             >
               Clear History
             </Button>
@@ -141,7 +141,7 @@ export function ChatInput(props: {
                   <span className="sr-only">Loading...</span>
                 </span>
               ) : (
-                <span>Send</span>
+                <span className="font-alchemist text-xl">Send</span>
               )}
             </Button>
           </div>
