@@ -4,6 +4,7 @@ import DOMPurify from 'isomorphic-dompurify';
 
 interface Message extends BaseMessage {
   timestamp: string;
+  name?: string;
 }
 
 export function ChatMessageBubble(props: {
@@ -26,6 +27,19 @@ export function ChatMessageBubble(props: {
     return { __html: sanitizedContent };
   };
 
+  const getAgentColor = (name?: string) => {
+    switch (name) {
+      case 'Merlin':
+        return 'text-blue-300';
+      case 'Tempest':
+        return 'text-emerald-300';
+      case 'Chronicle':
+        return 'text-amber-300';
+      default:
+        return '';
+    }
+  };
+
   return (
     <div
       className={cn(
@@ -37,8 +51,15 @@ export function ChatMessageBubble(props: {
       )}
     >
       {props.message.role !== "user" && (
-        <div className="mr-4 border bg-secondary -mt-2 rounded-full w-10 h-10 flex-shrink-0 flex items-center justify-center">
-          {props.aiEmoji}
+        <div className="flex flex-col items-center mr-4">
+          <div className="border bg-secondary -mt-2 rounded-full w-10 h-10 flex-shrink-0 flex items-center justify-center">
+            {props.aiEmoji}
+          </div>
+          {props.message.name && (
+            <span className={cn("text-xs mt-1 font-medium", getAgentColor(props.message.name))}>
+              {props.message.name}
+            </span>
+          )}
         </div>
       )}
 
