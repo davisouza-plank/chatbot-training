@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 import type { ToolInvocationUIPart } from "@ai-sdk/ui-utils";
 import React from "react";
+import { createClient } from '@/utils/supabase/client';
 
 import { ChatMessageBubble } from "@/components/ChatMessageBubble";
 import { IntermediateStep } from "@/components/IntermediateStep";
@@ -308,7 +309,15 @@ export function ChatWindow(props: {
           ...message,
           timestamp: new Date().toISOString()
         };
-        chat.setMessages([...chat.messages.slice(0, -1), messageWithTimestamp]);
+        chat.setMessages(prevMessages => {
+          const newMessages = [...prevMessages.slice(0, -1), messageWithTimestamp];
+          // Save conversation after updating messages
+          saveConversation(props.headers?.['X-Conversation-Id'] || '', newMessages);
+          return newMessages;
+        });
+      } else {
+        // Save conversation even if message already has timestamp
+        saveConversation(props.headers?.['X-Conversation-Id'] || '', chat.messages);
       }
     },
     onError: (e) =>
@@ -317,21 +326,89 @@ export function ChatWindow(props: {
       }),
   });
 
+  const saveConversation = async (conversationId: string, messages: Message[]) => {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    const messagesWithTimestamp = messages.map(msg => ({
+      ...msg,
+      timestamp: (msg as ChatMessage).timestamp || new Date().toISOString()
+    }));
+
+    if (conversationId) {
+      // Update existing conversation
+      const { error } = await supabase
+        .from('conversations')
+        .upsert({
+          id: conversationId,
+          user_uuid: session.user.id,
+          messages: messagesWithTimestamp,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) {
+        console.error('Error saving conversation:', error);
+        toast.error('Failed to save conversation');
+      }
+    } else {
+      // Create new conversation
+      const { data, error } = await supabase
+        .from('conversations')
+        .insert({
+          user_uuid: session.user.id,
+          messages: messagesWithTimestamp,
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating conversation:', error);
+        toast.error('Failed to create conversation');
+      } else if (data) {
+        // Update the URL with the new conversation ID
+        window.history.pushState({}, '', `/chat?id=${data.id}`);
+      }
+    }
+  };
+
   async function sendMessage(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (chat.isLoading) return;
 
     try {
+      // Save the user's message immediately
+      const userMessage: Message = {
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: chat.input,
+        createdAt: new Date()
+      };
+      const userMessageWithTimestamp = {
+        ...userMessage,
+        timestamp: new Date().toISOString()
+      };
+
+      chat.setMessages(messages => {
+        const newMessages = [...messages, userMessageWithTimestamp];
+        saveConversation(props.headers?.['X-Conversation-Id'] || '', newMessages);
+        return newMessages;
+      });
+      
       chat.handleSubmit(e);
     } catch (error) {
       console.error("Error sending message:", error);
     }
-    return;
   }
 
   const clearHistory = () => {
     chat.setMessages([]);
     setSourcesForMessages({});
+    // If we have a conversation ID, update it to empty in Supabase
+    if (props.headers?.['X-Conversation-Id']) {
+      saveConversation(props.headers['X-Conversation-Id'], []);
+    }
   };
 
   return (
