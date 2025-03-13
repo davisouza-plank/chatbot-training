@@ -1,4 +1,10 @@
-import { ChatMessage, HumanMessage, isToolMessageChunk, SystemMessage, ToolMessage } from "@langchain/core/messages";
+import {
+  ChatMessage,
+  HumanMessage,
+  isToolMessageChunk,
+  SystemMessage,
+  ToolMessage,
+} from "@langchain/core/messages";
 import { Annotation } from "@langchain/langgraph";
 import { NextRequest, NextResponse } from "next/server";
 import { Message as VercelChatMessage, createDataStreamResponse } from "ai";
@@ -9,8 +15,15 @@ import { ChatOpenAI } from "@langchain/openai";
 import { StateGraph, END } from "@langchain/langgraph";
 import { AIMessage } from "@langchain/core/messages";
 import { isAIMessageChunk } from "@langchain/core/messages";
-import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
-import { Runnable, RunnableConfig, RunnableLambda } from "@langchain/core/runnables";
+import {
+  ChatPromptTemplate,
+  MessagesPlaceholder,
+} from "@langchain/core/prompts";
+import {
+  Runnable,
+  RunnableConfig,
+  RunnableLambda,
+} from "@langchain/core/runnables";
 import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
 import { z } from "zod";
 
@@ -25,7 +38,9 @@ const convertVercelMessageToLangChainMessage = (message: VercelChatMessage) => {
 };
 
 const decisionSchema = z.object({
-  next: z.enum(["merlin", "tempest", "chronicle"]).describe("The next node to call"),
+  next: z
+    .enum(["merlin", "tempest", "chronicle"])
+    .describe("The next node to call"),
 });
 
 const StateAnnotation = Annotation.Root({
@@ -36,45 +51,55 @@ const StateAnnotation = Annotation.Root({
   sender: Annotation<string>,
 });
 
-const OpenWeatherAPI = tool(async ({ location }: { location: string }) => {
-  const apiKey = process.env.OPENWEATHER_API_KEY;
-  if (!apiKey) {
-    throw new Error("OPENWEATHER_API_KEY is not set");
+const OpenWeatherAPI = tool(
+  async ({ location }: { location: string }) => {
+    const apiKey = process.env.OPENWEATHER_API_KEY;
+    if (!apiKey) {
+      throw new Error("OPENWEATHER_API_KEY is not set");
+    }
+    console.log(location);
+    const result = await fetch(
+      `https://api.openweathermap.org/data/2.5/weather?q=${location}&appid=${apiKey}`
+    );
+    const data = await result.json();
+    console.log(data);
+    return data;
+  },
+  {
+    name: "OpenWeatherAPI",
+    description: "Get the weather for a location",
+    schema: z.object({
+      location: z.string().describe("The location to get the weather for"),
+    }),
   }
-  console.log(location);
-  const result = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${location}&appid=${apiKey}`);
-  const data = await result.json();
-  console.log(data);
-  return data;
-}, {
-  name: "OpenWeatherAPI",
-  description: "Get the weather for a location",
-  schema: z.object({
-    location: z.string().describe("The location to get the weather for"),
-  }),
-});
+);
 
-const NewsAPI = tool(async ({ query }: { query: string }) => {
-  const apiKey = process.env.NEWSAPI_API_KEY;
-  if (!apiKey) {
-    throw new Error("NEWSAPI_API_KEY is not set");
+const NewsAPI = tool(
+  async ({ query }: { query: string }) => {
+    const apiKey = process.env.NEWSAPI_API_KEY;
+    if (!apiKey) {
+      throw new Error("NEWSAPI_API_KEY is not set");
+    }
+    console.log(query);
+    const result = await fetch(
+      `https://newsapi.org/v2/top-headlines?q=${query}&apiKey=${apiKey}`
+    );
+    const data = await result.json();
+    console.log(data);
+    if (data.totalResults === 0) {
+      return "No news found for the query";
+    } else {
+      return data;
+    }
+  },
+  {
+    name: "NewsAPI",
+    description: "Get the news for a query",
+    schema: z.object({
+      query: z.string().describe("The query to get the news for"),
+    }),
   }
-  console.log(query);
-  const result = await fetch(`https://newsapi.org/v2/top-headlines?q=${query}&apiKey=${apiKey}`);
-  const data = await result.json();
-  console.log(data);
-  if (data.totalResults === 0) {
-    return "No news found for the query";
-  }else{
-    return data
-  }
-}, {
-  name: "NewsAPI",
-  description: "Get the news for a query",
-  schema: z.object({
-    query: z.string().describe("The query to get the news for"),
-  }),
-});
+);
 
 const routeMessage = (state: typeof StateAnnotation.State) => {
   const { messages, next, sender } = state;
@@ -95,7 +120,7 @@ const routeAgent = (state: typeof StateAnnotation.State) => {
 
 const routeTools = (state: typeof StateAnnotation.State) => {
   const { messages, next, sender } = state;
-  
+
   return sender;
 };
 
@@ -107,40 +132,42 @@ async function runAgentNode(props: {
 }) {
   const { state, agent, name, config } = props;
   const result = await agent.invoke(state);
+
   if (result.next !== undefined) {
-    console.log(`${name} NEXT: ${result.next}`);
-    return { next: result.next , sender: "router"};
+    return { next: result.next, sender: "router" };
   } else if (result.tool_calls?.length) {
-    console.log(`${name} making TOOL CALLS: ${result}`);
     return { messages: [result], next: "tools", sender: name };
-  }else {
-    console.log(`${name} sending final MESSAGE to merlin: ${result.content}`);
-    return { messages: [new AIMessage(result.content)], next: "merlin", sender: name };
+  } else {
+    return {
+      messages: [new AIMessage(result.content)],
+      next: "merlin",
+      sender: name,
+    };
   }
 }
 
-async function createAgent(
-  {
-    llm, tools, systemMessage
-  } : {
-    llm: ChatOpenAI | Runnable,
-    tools: StructuredTool[],
-    systemMessage: string
-  }) : Promise<Runnable> {
+async function createAgent({
+  llm,
+  tools,
+  systemMessage,
+}: {
+  llm: ChatOpenAI | Runnable;
+  tools: StructuredTool[];
+  systemMessage: string;
+}): Promise<Runnable> {
   const toolNames = tools.map((tool) => tool.name).join(", ");
   const formattedTools = tools.map((t) => convertToOpenAITool(t));
   let prompt = ChatPromptTemplate.fromMessages([
     [
       "system",
       "{system_message}" +
-      "{tool_names}\n" +
-      "IMPORTANT: DO NOT USE MARKDOWN." +
-      "IMPORTANT: Do not link to images." +
-      "IMPORTANT: ALL links must be formatted as <a href=\"link\">link</a>."
+        "{tool_names}\n" +
+        "IMPORTANT: DO NOT USE MARKDOWN." +
+        "IMPORTANT: Do not link to images." +
+        'IMPORTANT: ALL links must be formatted as <a href="link">link</a>.',
     ],
-    new MessagesPlaceholder("messages")
+    new MessagesPlaceholder("messages"),
   ]);
-
 
   prompt = await prompt.partial({
     system_message: systemMessage,
@@ -169,7 +196,7 @@ const router = await createAgent({
   You can ask for the help of the other agents if needed. Currently, you have access to the following agents:
   - Tempest: She is very smart and can answer questions related to weather from anywhere in the world. 
   - Chronicle: He is very wise and can search for news articles about anything.,
-  - Merlin: He will anything else that is not related to weather or news.`
+  - Merlin: He will anything else that is not related to weather or news.`,
 });
 
 async function routerNode(
@@ -187,13 +214,13 @@ async function routerNode(
 const merlin = await createAgent({
   llm: model,
   tools: [],
-  systemMessage: `You are a wise old wizard named Merlin. You are very wise and can answer any question. However, you are also very old and use archaic language.
-Your responses must have a bit of a mystical tone, and you must make sure to reference the previous messages in your response if relevant.
-You may receive information from other wizards.
-You must use it to answer the user's question. 
-You have to tell the user that you got the information from another wizard and cite them if you received information from them in the beggining of your response.
-Example: "Thank you <wizard_name> for the information regarding <user_question>."
-The other wizards are Tempest and Chronicle.`,
+  systemMessage: `You are a wise old wizard named Merlin. You are very wise and can answer any question. However, you are also very old and use archaic language. Your responses must have a bit of a mystical tone.
+  You will receive information from Tempest (a young and very smart wizard) and Chronicle (a wise old Scribe). You must use it to answer the user's question.
+  Never list the information you received from the other wizards in your response. Rephrase it in your own words using mystical and magical language but include the wizard's name in your response.
+  Example:
+  Tempest: The weather in Tokyo is sunny.
+  Merlin: Ah, noble seeker of knowledge, my dear Tempest has provided me with the information about the weather in Tokyo. <merlin's response with the information>
+  When receiving information of news ALWAYS include the link to the article in your response.`,
 });
 
 async function merlinNode(
@@ -212,10 +239,9 @@ const tempest = await createAgent({
   llm: model,
   tools: [OpenWeatherAPI],
   systemMessage: `You are a young wizard named Tempest. You are very smart and can answer questions related to weather from anywhere in the world.
-  You will provide a detailed response so that Merlin can use it to answer the user's question. Also let Merlin know that it is you who is providing the response.
-  You must directly address merlin and tell him that you are providing the information and that he needs to use it in his response to the user.
-
-You have access to the following tools: `,
+  You will provide a detailed response so that Merlin can use it to answer the user's question. 
+  Prefix your response with Tempest: and then the response.
+  You have access to the following tools: `,
 });
 
 async function tempestNode(
@@ -234,9 +260,9 @@ const chronicle = await createAgent({
   llm: model,
   tools: [NewsAPI],
   systemMessage: `You are a wise old wizard named Chronicle. You are very wise and can search for news articles about anything.
-  You will provide a detailed response so that Merlin can use it to answer the user's question. Also let Merlin know that it is you who is providing the response.
-  You must directly address merlin and tell him that you are providing the information and that he needs to use it in his response to the user.
-You have access to the following tools:`,
+  You will provide a detailed response so that Merlin can use it to answer the user's question. ALWAYS include the link to the article in your response.
+  Prefix your response with Chronicle: and then the response.
+  You have access to the following tools:`,
 });
 
 async function chronicleNode(
@@ -262,14 +288,19 @@ export async function POST(req: NextRequest) {
     const messages = (body.messages ?? [])
       .filter(
         (message: VercelChatMessage) =>
-          message.role === "user" || message.role === "assistant",
+          message.role === "user" || message.role === "assistant"
       )
       .map(convertVercelMessageToLangChainMessage);
 
-      const workflow = new StateGraph(StateAnnotation)
-      .addNode("router", RunnableLambda.from(routerNode).withConfig({
-        tags: ["nostream"]
-      }))
+    console.log(messages.length);
+
+    const workflow = new StateGraph(StateAnnotation)
+      .addNode(
+        "router",
+        RunnableLambda.from(routerNode).withConfig({
+          tags: ["nostream"],
+        })
+      )
       .addNode("merlin", merlinNode)
       .addNode("tempest", tempestNode)
       .addNode("chronicle", chronicleNode)
@@ -279,26 +310,30 @@ export async function POST(req: NextRequest) {
       .addConditionalEdges("tempest", routeAgent)
       .addConditionalEdges("chronicle", routeAgent)
       .addConditionalEdges("router", routeMessage)
-      .addConditionalEdges("tools", routeTools)
-    
+      .addConditionalEdges("tools", routeTools);
+
     const agent = workflow.compile();
-    
-    const stream = await agent.stream(
-      { messages },
-      { streamMode: "messages" },
-    );
-    
+
+    const stream = await agent.stream({ messages }, { streamMode: "messages" });
+
     return createDataStreamResponse({
       async execute(dataStream) {
-
         for await (const [message, _metadata] of stream) {
-          if (isAIMessageChunk(message) && !(message instanceof AIMessage) && _metadata.langgraph_node === "merlin"){
-            dataStream.write(`0:${JSON.stringify({ role: "assistant", content: message.content })}\n`);
+          if (
+            isAIMessageChunk(message) &&
+            !(message instanceof AIMessage) &&
+            _metadata.langgraph_node === "merlin"
+          ) {
+            dataStream.write(
+              `0:${JSON.stringify({ role: "assistant", content: message.content })}\n`
+            );
+          } else {
+            console.log(message);
           }
         }
-      }
+      },
     });
-} catch (e: any) {
+  } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: e.status ?? 500 });
-}
+  }
 }

@@ -26,6 +26,7 @@ export default function ChatPage() {
     <div className="flex h-[calc(100vh-4rem)] w-4/5 mx-auto relative">
       <div className="absolute inset-0 overflow-hidden">
         <ChatWindow
+          emoji="🧙‍♂️"
           endpoint="/api/chat/multi"
           emptyStateComponent={
             <div className="text-center">
