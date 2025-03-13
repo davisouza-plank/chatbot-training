@@ -32,34 +32,35 @@ export default function ChatPage() {
   }
 
   if (!authHeader) {
-    return <div className="flex h-[calc(100vh-4rem)] w-4/5 mx-auto items-center justify-center">Loading...</div>
+    return <div className="flex h-[calc(100vh-4rem)] items-center justify-center">Loading...</div>
   }
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] w-4/5 mx-auto relative">
+    <div className="flex h-[calc(100vh-4rem)]">
       <ConversationSidebar 
         currentConversationId={conversationId || undefined}
         onConversationSelect={handleConversationSelect}
         onNewConversation={handleNewConversation}
       />
-      <div className="flex-1 relative">
-        <div className="absolute inset-0 overflow-hidden">
-          <ChatWindow
-            emoji="🧙‍♂️"
-            endpoint="/api/chat/multi"
-            emptyStateComponent={
-              <div className="text-center">
-                <h1 className="font-unzialish text-3xl font-bold mb-4">Welcome to the Inner Chambers!</h1>
-                <p className="font-mysticora text-xl w-1/2 mx-auto">Start a conversation with <span className="text-blue-300">Merlin</span> and the other wizards <br/> - <span className="text-emerald-300">Tempest</span> (Weather) and <span className="text-amber-300">Chronicle</span> (News) - <br/> by typing a message below</p>
-              </div>
-            }
-            placeholder="How's the weather in San Francisco?"
-            showIntermediateStepsToggle={false}
-            headers={{
-              'Authorization': authHeader,
-              'X-Conversation-Id': conversationId || ''
-            }}
-          />
+      <div className="flex-1 pr-20">
+        <div className="h-full relative">
+          <div className="absolute inset-0 overflow-hidden">
+            <ChatWindow
+              endpoint="/api/chat/multi"
+              emptyStateComponent={
+                <div className="text-center">
+                  <h1 className="font-unzialish text-3xl font-bold mb-4">Welcome to the Inner Chambers!</h1>
+                  <p className="font-mysticora text-xl w-1/2 mx-auto">Start a conversation with <span className="text-blue-300">Merlin</span> and the other wizards <br/> - <span className="text-emerald-300">Tempest</span> (Weather) and <span className="text-amber-300">Chronicle</span> (News) - <br/> by typing a message below</p>
+                </div>
+              }
+              placeholder="How's the weather in San Francisco?"
+              showIntermediateStepsToggle={false}
+              headers={{
+                'Authorization': authHeader,
+                'X-Conversation-Id': conversationId || ''
+              }}
+            />
+          </div>
         </div>
       </div>
     </div>

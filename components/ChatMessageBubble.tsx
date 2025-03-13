@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import type { Message as BaseMessage } from "ai/react";
 import DOMPurify from 'isomorphic-dompurify';
+import Image from 'next/image';
 
 interface Message extends BaseMessage {
   timestamp: string;
@@ -40,6 +41,19 @@ export function ChatMessageBubble(props: {
     }
   };
 
+  const getAgentIcon = (name?: string) => {
+    switch (name) {
+      case 'Merlin':
+        return '/wizards/merlin.svg';
+      case 'Tempest':
+        return '/wizards/tempest.svg';
+      case 'Chronicle':
+        return '/wizards/chronicle.svg';
+      default:
+        return '';
+    }
+  };
+
   return (
     <div
       className={cn(
@@ -53,7 +67,14 @@ export function ChatMessageBubble(props: {
       {props.message.role !== "user" && (
         <div className="flex flex-col items-center mr-4">
           <div className="border bg-secondary -mt-2 rounded-full w-10 h-10 flex-shrink-0 flex items-center justify-center">
-            {props.aiEmoji}
+            {props.message.name && (
+              <Image
+                src={getAgentIcon(props.message.name)}
+                alt={props.message.name}
+                width={32}
+                height={32}
+              />
+            )}
           </div>
           {props.message.name && (
             <span className={cn("text-xs mt-1 font-medium", getAgentColor(props.message.name))}>
