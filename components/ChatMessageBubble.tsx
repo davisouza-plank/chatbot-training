@@ -43,7 +43,12 @@ export function ChatMessageBubble(props: {
       )}
 
       <div className="whitespace-pre-wrap flex flex-col">
-        <span dangerouslySetInnerHTML={createMarkup(props.message.content)} />
+        <span 
+          className={cn(
+            props.message.role === "user" ? "font-luminari" : "font-alchemist"
+          )}
+          dangerouslySetInnerHTML={createMarkup(props.message.content)} 
+        />
 
         {props.sources && props.sources.length ? (
           <>

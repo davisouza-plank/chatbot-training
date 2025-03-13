@@ -18,6 +18,10 @@ const config = {
       },
     },
     extend: {
+      fontFamily: {
+        luminari: ['var(--font-luminari)'],
+        alchemist: ['var(--font-alchemist)'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
