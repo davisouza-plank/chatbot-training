@@ -121,11 +121,15 @@ Visit [http://localhost:3000](http://localhost:3000) to enter Merlin's Tower.
 Experience the magic of Merlin's Tower through these enchanting previews:
 
 <p align="center">
-  <img alt="Merlin's Tower Chat Example 1" src="app/chat_1.png" width="600">
+  <img alt="Merlin's Tower Chat Main Screen" src="app/main_screen.png" width="600">
 </p>
 
 <p align="center">
-  <img alt="Merlin's Tower Chat Example 2" src="app/chat_2.png" width="600">
+  <img alt="Merlin's Tower Chat Example 1" src="app/chat_screen.png" width="600">
+</p>
+
+<p align="center">
+  <img alt="Merlin's Tower Chat Example 2" src="app/chat_screen_2.png" width="600">
 </p>
 
 ## 🛠️ Built With
