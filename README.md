@@ -38,6 +38,7 @@
   - 📰 Integration with NewsAPI
   - 🎯 Server-side streaming
   - 🌙 Dark/Light theme support
+  - 🎛️ Adjustable model temperature settings
 
 ## 🚀 Getting Started
 
@@ -70,7 +71,7 @@
 2. Set up your Supabase project:
    - Create a new project at [database.new](https://database.new)
    - Set up authentication (Email providers)
-   - Create necessary database tables for conversation storage
+   - Create necessary database tables for conversation and settings storage
 
 ## 💫 Development
 
@@ -90,7 +91,7 @@ Visit [http://localhost:3000](http://localhost:3000) to enter Merlin's Tower.
 
 1. **Authentication**
    - Users must sign in to access the magical realm
-   - Supports email/password and OAuth providers
+   - Supports email/password
    - Secure session management via Supabase
 
 2. **Conversation Flow**
@@ -102,7 +103,6 @@ Visit [http://localhost:3000](http://localhost:3000) to enter Merlin's Tower.
 3. **Voice Interaction**
    - Click the microphone icon to activate voice input
    - Speech is automatically transcribed and processed
-   - Supports natural language commands
 
 4. **Message Display**
    - Each wizard has a unique color and icon
@@ -116,6 +116,18 @@ Visit [http://localhost:3000](http://localhost:3000) to enter Merlin's Tower.
    - Clear history option available
    - Real-time updates across devices
 
+## 📸 Examples
+
+Experience the magic of Merlin's Tower through these enchanting previews:
+
+<p align="center">
+  <img alt="Merlin's Tower Chat Example 1" src="app/chat_1.png" width="600">
+</p>
+
+<p align="center">
+  <img alt="Merlin's Tower Chat Example 2" src="app/chat_2.png" width="600">
+</p>
+
 ## 🛠️ Built With
 
 - [Next.js 14](https://nextjs.org/) - React Framework
@@ -124,7 +136,3 @@ Visit [http://localhost:3000](http://localhost:3000) to enter Merlin's Tower.
 - [shadcn/ui](https://ui.shadcn.com/) - UI Components
 - [OpenWeather API](https://openweathermap.org/api) - Weather Data
 - [NewsAPI](https://newsapi.org/) - News Data
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
