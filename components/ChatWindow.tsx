@@ -276,11 +276,46 @@ export function ChatWindow(props: {
   const [sourcesForMessages, setSourcesForMessages] = useState<
     Record<string, any>
   >({});
+  const [initialMessages, setInitialMessages] = useState<Message[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch conversation messages when conversation ID changes
+  useEffect(() => {
+    const fetchConversation = async () => {
+      if (!props.headers?.['X-Conversation-Id']) {
+        setInitialMessages([]);
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('conversations')
+        .select('messages')
+        .eq('id', props.headers['X-Conversation-Id'])
+        .single();
+
+      if (error) {
+        console.error('Error fetching conversation:', error);
+        toast.error('Failed to load conversation');
+        setIsLoading(false);
+        return;
+      }
+
+      if (data?.messages) {
+        setInitialMessages(data.messages);
+      }
+      setIsLoading(false);
+    };
+
+    fetchConversation();
+  }, [props.headers?.['X-Conversation-Id']]);
 
   const chat = useChat({
     api: props.endpoint,
     id: props.headers?.['X-Conversation-Id'],
-    initialMessages: [],
+    initialMessages: initialMessages,
     headers: props.headers,
     onResponse(response) {
       const sourcesHeader = response.headers.get("x-sources");
@@ -507,7 +542,11 @@ export function ChatWindow(props: {
   return (
     <ChatLayout
       content={
-        chat.messages.length === 0 ? (
+        isLoading ? (
+          <div className="flex items-center justify-center h-full">
+            <LoaderCircle className="h-8 w-8 animate-spin" />
+          </div>
+        ) : chat.messages.length === 0 ? (
           <div>{props.emptyStateComponent}</div>
         ) : (
           <ChatMessages
