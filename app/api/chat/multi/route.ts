@@ -189,11 +189,18 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const authHeader = req.headers.get('authorization');
     
+    console.log('Auth header:', authHeader ? 'Present' : 'Missing');
+    
     if (!authHeader) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Missing authorization header' }, { status: 401 });
     }
 
     const token = authHeader.split(' ')[1];
+    if (!token) {
+      return NextResponse.json({ error: 'Invalid authorization format' }, { status: 401 });
+    }
+
+    console.log('Token:', token.substring(0, 10) + '...');  // Log first 10 chars for debugging
     
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -213,19 +220,71 @@ export async function POST(req: NextRequest) {
       }
     );
 
-    // Get user settings
-    const { data: { user } } = await supabase.auth.getUser(token);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Try to get session first
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError) {
+      console.error('Session error:', sessionError);
+      return NextResponse.json({ error: 'Session error' }, { status: 401 });
     }
 
-    const { data: settings } = await supabase
+    // Get user settings using the token
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    console.log('User fetch result:', {
+      hasUser: !!user,
+      error: userError ? userError.message : null
+    });
+
+    if (userError) {
+      console.error('Auth error:', userError);
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    }
+
+    if (!user) {
+      console.error('No user found');
+      return NextResponse.json({ error: 'User not found' }, { status: 401 });
+    }
+
+    // First check if user settings exist
+    let { data: settings, error: settingsError } = await supabase
       .from('user_settings')
       .select('*')
       .eq('user_uuid', user.id)
       .single();
 
-    // Use default temperatures if no settings found
+    console.log('Settings fetch result:', {
+      hasSettings: !!settings,
+      error: settingsError ? settingsError.message : null
+    });
+
+    // If settings don't exist or there's an error, create default settings
+    if (!settings || settingsError) {
+      const defaultSettings = {
+        user_uuid: user.id,
+        merlin_temperature: 0.7,
+        tempest_temperature: 0.5,
+        chronicle_temperature: 0.3,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      const { data: newSettings, error: createError } = await supabase
+        .from('user_settings')
+        .insert([defaultSettings])
+        .select()
+        .single();
+
+      if (createError) {
+        console.error('Error creating settings:', createError);
+        // Continue with default settings even if save fails
+        settings = defaultSettings;
+      } else {
+        settings = newSettings;
+      }
+    }
+
+    // Use settings with fallback to defaults
     const temperatures = {
       merlin: settings?.merlin_temperature ?? 0.7,
       tempest: settings?.tempest_temperature ?? 0.5,
@@ -237,7 +296,9 @@ export async function POST(req: NextRequest) {
         (message: VercelChatMessage) =>
           message.role === "user" || message.role === "assistant"
       )
-      .map(convertVercelMessageToLangChainMessage);
+      .map(convertVercelMessageToLangChainMessage).slice(-10);
+
+    
 
     // Create models with user-specific temperatures
     const routerModel = new ChatOpenAI({
@@ -272,6 +333,7 @@ export async function POST(req: NextRequest) {
       You can ask for the help of the other agents if needed. Currently, you have access to the following agents:
       - Tempest: Retrieves weather information from the OpenWeather API. 
       - Chronicle: Retrieves news information from the NewsAPI.
+      If all the information is already provided, you can call Merlin to finish the conversation.
       - Merlin: Answers anything else that is not related to weather or news. If the work is finished you can call him to finish the conversation.`,
     });
 

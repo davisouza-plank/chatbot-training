@@ -281,6 +281,7 @@ export function ChatWindow(props: {
     api: props.endpoint,
     id: props.headers?.['X-Conversation-Id'],
     initialMessages: [],
+    headers: props.headers,
     onResponse(response) {
       const sourcesHeader = response.headers.get("x-sources");
       const sources = sourcesHeader
