@@ -136,3 +136,6 @@ Experience the magic of Merlin's Tower through these enchanting previews:
 - [shadcn/ui](https://ui.shadcn.com/) - UI Components
 - [OpenWeather API](https://openweathermap.org/api) - Weather Data
 - [NewsAPI](https://newsapi.org/) - News Data
+
+## Known Bugs
+- First message on login might get stuck, just refresh the page or create a new conversation
