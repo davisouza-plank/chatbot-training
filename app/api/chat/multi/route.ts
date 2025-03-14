@@ -137,10 +137,16 @@ async function runAgentNode(props: {
     return { next: result.next, sender: "router" };
   } else if (result.tool_calls?.length) {
     return { messages: [result], next: "tools", sender: name };
-  } else {
+  } else if (name == "merlin") {
     return {
       messages: [new AIMessage(result.content)],
-      next: "merlin",
+      next: "__end__",
+      sender: name,
+    };
+  }else {
+    return {
+      messages: [new AIMessage(result.content)],
+      next: "router",
       sender: name,
     };
   }
@@ -293,7 +299,7 @@ export async function POST(req: NextRequest) {
         (message: VercelChatMessage) =>
           message.role === "user" || message.role === "assistant"
       )
-      .map(convertVercelMessageToLangChainMessage).slice(-10);
+      .map(convertVercelMessageToLangChainMessage).slice(-9);
 
     
 
