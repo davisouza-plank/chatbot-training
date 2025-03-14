@@ -1,7 +1,7 @@
 # 🏰 Merlin's Tower
 
 <p align="center">
-  <img alt="Merlin's Tower - A magical conversational experience powered by Next.js and Supabase" src="https://demo-nextjs-with-supabase.vercel.app/opengraph-image.png">
+  <img alt="Merlin's Tower - A magical conversational experience powered by Next.js and Supabase" src="app/main_screen.png">
 </p>
 
 <p align="center">
@@ -119,10 +119,6 @@ Visit [http://localhost:3000](http://localhost:3000) to enter Merlin's Tower.
 ## 📸 Examples
 
 Experience the magic of Merlin's Tower through these enchanting previews:
-
-<p align="center">
-  <img alt="Merlin's Tower Chat Main Screen" src="app/main_screen.png" width="600">
-</p>
 
 <p align="center">
   <img alt="Merlin's Tower Chat Example 1" src="app/chat_screen.png" width="600">
