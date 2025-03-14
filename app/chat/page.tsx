@@ -77,7 +77,13 @@ function ChatPageContent({ authHeader }: { authHeader: string }) {
   }, [supabase]);
 
   const handleConversationSelect = (id: string) => {
-    router.push(`/chat?id=${id}`)
+    if (id.length === 0)
+    {
+      router.push(`/chat`);
+    }
+    else{
+      router.push(`/chat?id=${id}`);
+    }
   }
 
   const handleNewConversation = async () => {

@@ -108,12 +108,26 @@ export function ConversationSidebar({
       .delete()
       .eq('id', id);
 
-    if (error) {
-      console.error('Error deleting conversation:', error);
-      toast.error('Failed to delete conversation');
-      return;
-    }
+      if (error) {
+        console.error('Error deleting conversation:', error);
+        toast.error('Failed to delete conversation');
+        // Restore the conversation in local state if deletion failed
+        if (id === currentConversationId) {
+          const { data } = await supabase
+            .from('conversations')
+            .select('*')
+            .eq('id', id)
+            .single();
+          if (data) {
+            setConversations(prev => [data, ...prev]);
+          }
+        }
+        return;
+      }
     setConversations(prev => prev.filter(c => c.id !== id));
+    if (id === currentConversationId) {
+      onConversationSelect('');
+    }
     toast.success('Conversation deleted');
   };
 
