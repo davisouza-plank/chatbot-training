@@ -282,8 +282,11 @@ export function ChatWindow(props: {
   // Fetch conversation messages when conversation ID changes
   useEffect(() => {
     const fetchConversation = async () => {
+      // Reset state when there's no conversation ID
       if (!props.headers?.['X-Conversation-Id']) {
         setInitialMessages([]);
+        setSourcesForMessages({});
+        chat.setMessages([]);
         setIsLoading(false);
         return;
       }
