@@ -363,7 +363,9 @@ export function ChatWindow(props: {
                         }
                       ];
                       // Save messages immediately after update
-                      saveConversation(props.headers?.['X-Conversation-Id'] || '', newMessages);
+                      if (props.headers?.['X-Conversation-Id']) {
+                        saveConversation(props.headers['X-Conversation-Id'], newMessages);
+                      }
                       return newMessages;
                     }
                     // Create new message if role or name is different
@@ -409,13 +411,12 @@ export function ChatWindow(props: {
         };
         chat.setMessages(prevMessages => {
           const newMessages = [...prevMessages.slice(0, -1), messageWithTimestamp];
-          // Save conversation after updating messages
-          saveConversation(props.headers?.['X-Conversation-Id'] || '', newMessages);
           return newMessages;
         });
-      } else {
-        // Save conversation even if message already has timestamp
-        saveConversation(props.headers?.['X-Conversation-Id'] || '', chat.messages);
+      } 
+      if (props.headers?.['X-Conversation-Id']) {
+        // Save conversation if message already has timestamp
+        saveConversation(props.headers['X-Conversation-Id'], chat.messages);
       }
     },
     onError: (e) =>
@@ -425,11 +426,11 @@ export function ChatWindow(props: {
   });
 
   // Add effect to save messages whenever they change
-  useEffect(() => {
-    if (chat.messages.length > 0) {
-      saveConversation(props.headers?.['X-Conversation-Id'] || '', chat.messages);
-    }
-  }, [chat.messages, props.headers]);
+  // useEffect(() => {
+  //   if (chat.messages.length > 0) {
+  //     saveConversation(props.headers?.['X-Conversation-Id'] || '', chat.messages);
+  //   }
+  // }, [chat.messages, props.headers]);
 
   const saveConversation = async (conversationId: string, messages: Message[]) => {
     const supabase = createClient();
@@ -496,34 +497,9 @@ export function ChatWindow(props: {
         const supabase = createClient();
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return;
-
-        // Create new empty conversation
-        const { data, error } = await supabase
-          .from('conversations')
-          .insert({
-            user_uuid: session.user.id,
-            messages: [],
-            updated_at: new Date().toISOString()
-          })
-          .select()
-          .single();
-
-        if (error) {
-          console.error('Error creating new conversation:', error);
-          toast.error('Failed to create new conversation');
-          return;
-        }
-
-        if (data) {
-          // Update headers with new conversation ID
-          if (props.headers) {
-            props.headers['X-Conversation-Id'] = data.id;
-          }
-          // Notify parent about new conversation
-          props.onConversationCreated?.(data.id, data);
-        }
       }
-
+      // Save conversation before submitting
+      saveConversation(props.headers?.['X-Conversation-Id'] || '', []);
       chat.handleSubmit(e);
     } catch (error) {
       console.error("Error sending message:", error);

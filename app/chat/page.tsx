@@ -116,10 +116,11 @@ function ChatPageContent({ authHeader }: { authHeader: string }) {
 
   const handleConversationCreated = (id: string, conversation: any) => {
     if (!conversationId) {
+      // Update conversations list immediately
+      setConversations(prev => [conversation, ...prev]);
+
       router.push(`/chat?id=${id}`);
     }
-    // Update conversations list immediately
-    setConversations(prev => [conversation, ...prev]);
   }
 
   const handleConversationUpdated = (updatedConversation: any) => {
