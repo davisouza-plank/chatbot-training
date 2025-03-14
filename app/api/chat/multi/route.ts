@@ -1,14 +1,11 @@
 import {
   ChatMessage,
   HumanMessage,
-  isToolMessageChunk,
-  SystemMessage,
-  ToolMessage,
 } from "@langchain/core/messages";
 import { Annotation } from "@langchain/langgraph";
 import { NextRequest, NextResponse } from "next/server";
 import { Message as VercelChatMessage, createDataStreamResponse } from "ai";
-import type { BaseMessage, BaseMessageLike } from "@langchain/core/messages";
+import type { BaseMessageLike } from "@langchain/core/messages";
 import { StructuredTool, tool } from "@langchain/core/tools";
 import { ToolNode } from "@langchain/langgraph/prebuilt";
 import { ChatOpenAI } from "@langchain/openai";
@@ -26,6 +23,8 @@ import {
 } from "@langchain/core/runnables";
 import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
 import { z } from "zod";
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 
 const convertVercelMessageToLangChainMessage = (message: VercelChatMessage) => {
   if (message.role === "user") {
@@ -164,6 +163,7 @@ async function createAgent({
       "{system_message}" +
         "{tool_names}\n" +
         "IMPORTANT: DO NOT USE MARKDOWN." +
+        "Replace ** (double asterisks) with <bold>text</bold>." +
         "IMPORTANT: Do not link to images." +
         'IMPORTANT: ALL links must be formatted as <a href="link">link</a>.',
     ],
@@ -181,114 +181,233 @@ async function createAgent({
   }
 }
 
-const model = new ChatOpenAI({
-  model: "gpt-4o-mini",
-  temperature: 0,
-});
-
-const tools = [OpenWeatherAPI, NewsAPI];
-const toolNode = new ToolNode(tools);
-
-const planner = model.withStructuredOutput(decisionSchema);
-const router = await createAgent({
-  llm: planner,
-  tools: [],
-  systemMessage: `You are a router that decides which agent to call next. You are very smart and can decide which agent to call based on the messages
-  You can ask for the help of the other agents if needed. Currently, you have access to the following agents:
-  - Tempest: She is very smart and can answer questions related to weather from anywhere in the world. 
-  - Chronicle: He is very wise and can search for news articles about anything.,
-  - Merlin: He will anything else that is not related to weather or news. If the work is finished you can call him to finish the conversation.`,
-});
-
-async function routerNode(
-  state: typeof StateAnnotation.State,
-  config: RunnableConfig
-) {
-  return runAgentNode({
-    state: state,
-    agent: router,
-    name: "router",
-    config,
-  });
-}
-
-const merlin = await createAgent({
-  llm: model,
-  tools: [],
-  systemMessage: `You are a wise old wizard named Merlin. You are very wise and can answer any question. However, you are also very old and use archaic language. Your responses must have a bit of a mystical tone.
-  You will receive information from Tempest (Weather information) and Chronicle (News information). 
-  Just make some remarks about the information you received from the other wizards if available.`,
-});
-
-async function merlinNode(
-  state: typeof StateAnnotation.State,
-  config: RunnableConfig
-) {
-  return runAgentNode({
-    state: state,
-    agent: merlin,
-    name: "merlin",
-    config,
-  });
-}
-
-const tempest = await createAgent({
-  llm: model,
-  tools: [OpenWeatherAPI],
-  systemMessage: `You are a young wizard named Tempest. You are very smart and can answer questions related to weather from anywhere in the world. You are also very young and use modern language with a very modern tone. Always answer in the style of a modern young person with arcane and mystical language.
-  You will provide a detailed response to the user.
-  You have access to the following tools: `,
-});
-
-async function tempestNode(
-  state: typeof StateAnnotation.State,
-  config: RunnableConfig
-) {
-  return runAgentNode({
-    state: state,
-    agent: tempest,
-    name: "tempest",
-    config,
-  });
-}
-
-const chronicle = await createAgent({
-  llm: model,
-  tools: [NewsAPI],
-  systemMessage: `You are a wise old wizard named Chronicle. You are very wise and can search for news articles about anything. However, you are also very old and use archaic language with a very old-fashioned tone since you are a Scribe. Always answer in the style of a Scribe with arcane and mystical language.
-  You will provide a detailed response to the user.
-  ALWAYS include the link to the article in your response.
-  You have access to the following tools:`,
-});
-
-async function chronicleNode(
-  state: typeof StateAnnotation.State,
-  config: RunnableConfig
-) {
-  return runAgentNode({
-    state: state,
-    agent: chronicle,
-    name: "chronicle",
-    config,
-  });
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    // const returnIntermediateSteps = body.show_intermediate_steps;
-    /**
-     * We represent intermediate steps as system messages for display purposes,
-     * but don't want them in the chat history.
-     */
+    const authHeader = req.headers.get('authorization');
+    
+    console.log('Auth header:', authHeader ? 'Present' : 'Missing');
+    
+    if (!authHeader) {
+      return NextResponse.json({ error: 'Missing authorization header' }, { status: 401 });
+    }
+
+    const token = authHeader.split(' ')[1];
+    if (!token) {
+      return NextResponse.json({ error: 'Invalid authorization format' }, { status: 401 });
+    }
+
+    console.log('Token:', token.substring(0, 10) + '...');  // Log first 10 chars for debugging
+    
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return req.cookies.get(name)?.value;
+          },
+          set(name: string, value: string, options: any) {
+            // We don't need to set cookies in an API route
+          },
+          remove(name: string, options: any) {
+            // We don't need to remove cookies in an API route
+          },
+        },
+      }
+    );
+
+    // Try to get session first
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError) {
+      console.error('Session error:', sessionError);
+      return NextResponse.json({ error: 'Session error' }, { status: 401 });
+    }
+
+    // Get user settings using the token
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    console.log('User fetch result:', {
+      hasUser: !!user,
+      error: userError ? userError.message : null
+    });
+
+    if (userError) {
+      console.error('Auth error:', userError);
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    }
+
+    if (!user) {
+      console.error('No user found');
+      return NextResponse.json({ error: 'User not found' }, { status: 401 });
+    }
+
+    // First check if user settings exist
+    let { data: settings, error: settingsError } = await supabase
+      .from('user_settings')
+      .select('*')
+      .eq('user_uuid', user.id)
+      .single();
+
+    console.log('Settings fetch result:', {
+      hasSettings: !!settings,
+      error: settingsError ? settingsError.message : null
+    });
+
+    // If settings don't exist or there's an error, create default settings
+    if (!settings || settingsError) {
+      const defaultSettings = {
+        user_uuid: user.id,
+        merlin_temperature: 0.7,
+        tempest_temperature: 0.5,
+        chronicle_temperature: 0.3,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      const { data: newSettings, error: createError } = await supabase
+        .from('user_settings')
+        .insert([defaultSettings])
+        .select()
+        .single();
+
+      if (createError) {
+        console.error('Error creating settings:', createError);
+        // Continue with default settings even if save fails
+        settings = defaultSettings;
+      } else {
+        settings = newSettings;
+      }
+    }
+
+    // Use settings with fallback to defaults
+    const temperatures = {
+      merlin: settings?.merlin_temperature ?? 0.7,
+      tempest: settings?.tempest_temperature ?? 0.5,
+      chronicle: settings?.chronicle_temperature ?? 0.3,
+    };
+
     const messages = (body.messages ?? [])
       .filter(
         (message: VercelChatMessage) =>
           message.role === "user" || message.role === "assistant"
       )
-      .map(convertVercelMessageToLangChainMessage);
+      .map(convertVercelMessageToLangChainMessage).slice(-10);
 
-    console.log(messages.length);
+    
+
+    // Create models with user-specific temperatures
+    const routerModel = new ChatOpenAI({
+      model: "gpt-4o-mini",
+      temperature: 0, // Router should always be deterministic
+    });
+
+    const merlinModel = new ChatOpenAI({
+      model: "gpt-4o-mini",
+      temperature: temperatures.merlin,
+    });
+
+    const tempestModel = new ChatOpenAI({
+      model: "gpt-4o-mini",
+      temperature: temperatures.tempest,
+    });
+
+    const chronicleModel = new ChatOpenAI({
+      model: "gpt-4o-mini",
+      temperature: temperatures.chronicle,
+    });
+
+    // Create agents with the personalized models
+    const tools = [OpenWeatherAPI, NewsAPI];
+    const toolNode = new ToolNode(tools);
+
+    const planner = routerModel.withStructuredOutput(decisionSchema);
+    const router = await createAgent({
+      llm: planner,
+      tools: [],
+      systemMessage: `You are a router that decides which agent to call next. You are very smart and can decide which agent to call based on the messages
+      You can ask for the help of the other agents if needed. Currently, you have access to the following agents:
+      - Tempest: Retrieves weather information from the OpenWeather API. All questions that have weather requests should also be sent to Tempest.
+      - Chronicle: Retrieves news information from the NewsAPI. All questions that have news requests should also be sent to Chronicle.
+      - Merlin: Gives the final answer to the user.
+      After retrieving the information, you must call Merlin to answer the question.`,
+    });
+
+    async function routerNode(
+      state: typeof StateAnnotation.State,
+      config: RunnableConfig
+    ) {
+      return runAgentNode({
+        state: state,
+        agent: router,
+        name: "router",
+        config,
+      });
+    }
+
+    const merlin = await createAgent({
+      llm: merlinModel,
+      tools: [],
+      systemMessage: `You are a wise old wizard named Merlin. You are very wise and can answer any question. However, you are also very old and use archaic language. Your responses must have a bit of a mystical tone.
+      You will receive information from Tempest (Weather information) and Chronicle (News information). 
+      Don't worry about retrieving the information, your colleagues have already done that. Just comment on the information you received from the other wizards if available.
+      Just make some remarks about the information you received from the other wizards if available.
+      If the question is not related to weather or news, just answer the question.`,
+    });
+
+    async function merlinNode(
+      state: typeof StateAnnotation.State,
+      config: RunnableConfig
+    ) {
+      return runAgentNode({
+        state: state,
+        agent: merlin,
+        name: "merlin",
+        config,
+      });
+    }
+
+    const tempest = await createAgent({
+      llm: tempestModel,
+      tools: [OpenWeatherAPI],
+      systemMessage: `You are a young wizard named Tempest. You are very smart and can answer questions related to weather from anywhere in the world. You are also very young and use modern language with a very modern tone. Always answer in the style of a modern young person with arcane and mystical language.
+      You will provide a detailed response to the user. Don't worry about retrieving information about news, your colleagues will do that. Just answer the question about the weather.
+      You have access to the following tools: `,
+    });
+
+    async function tempestNode(
+      state: typeof StateAnnotation.State,
+      config: RunnableConfig
+    ) {
+      return runAgentNode({
+        state: state,
+        agent: tempest,
+        name: "tempest",
+        config,
+      });
+    }
+
+    const chronicle = await createAgent({
+      llm: chronicleModel,
+      tools: [NewsAPI],
+      systemMessage: `You are a wise old wizard named Chronicle. You are very wise and can search for news articles about anything. However, you are also very old and use archaic language with a very old-fashioned tone since you are a Scribe. Always answer in the style of a Scribe with arcane and mystical language.
+      You will provide a detailed response to the user. Don't worry about retrieving information about weather, your colleagues will do that. Just answer the question about the news.
+      ALWAYS include the link to the article in your response.
+      You have access to the following tools:`,
+    });
+
+    async function chronicleNode(
+      state: typeof StateAnnotation.State,
+      config: RunnableConfig
+    ) {
+      return runAgentNode({
+        state: state,
+        agent: chronicle,
+        name: "chronicle",
+        config,
+      });
+    }
 
     const workflow = new StateGraph(StateAnnotation)
       .addNode(
@@ -309,7 +428,6 @@ export async function POST(req: NextRequest) {
       .addConditionalEdges("tools", routeTools);
 
     const agent = workflow.compile();
-
     const stream = await agent.stream({ messages }, { streamMode: "messages" });
 
     return createDataStreamResponse({

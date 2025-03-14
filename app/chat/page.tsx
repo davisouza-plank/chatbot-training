@@ -6,6 +6,7 @@ import { ChatWindow } from '@/components/ChatWindow'
 import { ConversationSidebar } from '@/components/ConversationSidebar'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
+import { WizardSettings } from '@/components/WizardSettings'
 
 export default function ChatPage() {
   const supabase = createClient()
@@ -76,7 +77,13 @@ function ChatPageContent({ authHeader }: { authHeader: string }) {
   }, [supabase]);
 
   const handleConversationSelect = (id: string) => {
-    router.push(`/chat?id=${id}`)
+    if (id.length === 0)
+    {
+      router.push(`/chat`);
+    }
+    else{
+      router.push(`/chat?id=${id}`);
+    }
   }
 
   const handleNewConversation = async () => {
@@ -109,10 +116,11 @@ function ChatPageContent({ authHeader }: { authHeader: string }) {
 
   const handleConversationCreated = (id: string, conversation: any) => {
     if (!conversationId) {
+      // Update conversations list immediately
+      setConversations(prev => [conversation, ...prev]);
+
       router.push(`/chat?id=${id}`);
     }
-    // Update conversations list immediately
-    setConversations(prev => [conversation, ...prev]);
   }
 
   const handleConversationUpdated = (updatedConversation: any) => {
@@ -133,7 +141,7 @@ function ChatPageContent({ authHeader }: { authHeader: string }) {
         setConversations={setConversations}
         isLoading={isLoading}
       />
-      <div className="flex-1 pr-20">
+      <div className="flex-1">
         <div className="h-full relative">
           <div className="absolute inset-0 overflow-hidden">
             <ChatWindow
@@ -156,6 +164,9 @@ function ChatPageContent({ authHeader }: { authHeader: string }) {
             />
           </div>
         </div>
+      </div>
+      <div className="w-[350px] p-4 border-l">
+        <WizardSettings />
       </div>
     </div>
   )

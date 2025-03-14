@@ -276,11 +276,50 @@ export function ChatWindow(props: {
   const [sourcesForMessages, setSourcesForMessages] = useState<
     Record<string, any>
   >({});
+  const [initialMessages, setInitialMessages] = useState<Message[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch conversation messages when conversation ID changes
+  useEffect(() => {
+    const fetchConversation = async () => {
+      // Reset state when there's no conversation ID
+      if (!props.headers?.['X-Conversation-Id']) {
+        setInitialMessages([]);
+        setSourcesForMessages({});
+        chat.setMessages([]);
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('conversations')
+        .select('messages')
+        .eq('id', props.headers['X-Conversation-Id'])
+        .single();
+
+      if (error) {
+        console.error('Error fetching conversation:', error);
+        toast.error('Failed to load conversation');
+        setIsLoading(false);
+        return;
+      }
+
+      if (data?.messages) {
+        setInitialMessages(data.messages);
+      }
+      setIsLoading(false);
+    };
+
+    fetchConversation();
+  }, [props.headers?.['X-Conversation-Id']]);
 
   const chat = useChat({
     api: props.endpoint,
     id: props.headers?.['X-Conversation-Id'],
-    initialMessages: [],
+    initialMessages: initialMessages,
+    headers: props.headers,
     onResponse(response) {
       const sourcesHeader = response.headers.get("x-sources");
       const sources = sourcesHeader
@@ -295,22 +334,54 @@ export function ChatWindow(props: {
       if (reader) {
         // Read the stream
         const readStream = async () => {
+          let buffer = ''; // Buffer to store incomplete chunks
           try {
             while (true) {
               const { done, value } = await reader.read();
-              if (done) break;
+              if (done) {
+                // Process any remaining data in the buffer
+                if (buffer) {
+                  try {
+                    const update = JSON.parse(buffer) as ChatMessage;
+                    chat.setMessages(messages => {
+                      const lastMessage = messages[messages.length - 1] as ChatMessage;
+                      if (lastMessage && 
+                          lastMessage.role === update.role && 
+                          lastMessage.name === update.name) {
+                        const newMessages = [
+                          ...messages.slice(0, -1),
+                          {
+                            ...lastMessage,
+                            content: update.content || lastMessage.content,
+                            timestamp: new Date().toISOString()
+                          }
+                        ];
+                        saveConversation(props.headers?.['X-Conversation-Id'] || '', newMessages);
+                        return newMessages;
+                      }
+                      return messages;
+                    });
+                  } catch (e) {
+                    console.warn("Error parsing final buffer:", e);
+                  }
+                }
+                break;
+              }
               
               // Decode the stream chunk
               const chunk = decoder.decode(value);
+              buffer += chunk;
               
               // Match complete messages in the format "0:{...}"
               const messageRegex = /0:(\{(?:[^{}]|(?:\{[^{}]*\}))*\})/g;
-              const matches = Array.from(chunk.matchAll(messageRegex));
+              let match;
+              let lastIndex = 0;
               
-              for (const match of matches) {
+              while ((match = messageRegex.exec(buffer)) !== null) {
                 try {
                   const jsonContent = match[1];
                   const update = JSON.parse(jsonContent) as ChatMessage;
+                  lastIndex = match.index + match[0].length;
                   
                   // Update the last message with the new content
                   chat.setMessages(messages => {
@@ -327,7 +398,9 @@ export function ChatWindow(props: {
                         }
                       ];
                       // Save messages immediately after update
-                      saveConversation(props.headers?.['X-Conversation-Id'] || '', newMessages);
+                      if (props.headers?.['X-Conversation-Id']) {
+                        saveConversation(props.headers['X-Conversation-Id'], newMessages);
+                      }
                       return newMessages;
                     }
                     // Create new message if role or name is different
@@ -340,7 +413,6 @@ export function ChatWindow(props: {
                         content: update.content || ''
                       }
                     ];
-                    // Save messages immediately after update
                     saveConversation(props.headers?.['X-Conversation-Id'] || '', newMessages);
                     return newMessages;
                   });
@@ -348,6 +420,9 @@ export function ChatWindow(props: {
                   console.error("Error parsing stream chunk:", e);
                 }
               }
+              
+              // Keep any incomplete message in the buffer
+              buffer = buffer.slice(lastIndex);
             }
           } catch (e) {
             console.error("Error reading stream:", e);
@@ -373,13 +448,12 @@ export function ChatWindow(props: {
         };
         chat.setMessages(prevMessages => {
           const newMessages = [...prevMessages.slice(0, -1), messageWithTimestamp];
-          // Save conversation after updating messages
-          saveConversation(props.headers?.['X-Conversation-Id'] || '', newMessages);
           return newMessages;
         });
-      } else {
-        // Save conversation even if message already has timestamp
-        saveConversation(props.headers?.['X-Conversation-Id'] || '', chat.messages);
+      } 
+      if (props.headers?.['X-Conversation-Id']) {
+        // Save conversation if message already has timestamp
+        saveConversation(props.headers['X-Conversation-Id'], chat.messages);
       }
     },
     onError: (e) =>
@@ -389,11 +463,11 @@ export function ChatWindow(props: {
   });
 
   // Add effect to save messages whenever they change
-  useEffect(() => {
-    if (chat.messages.length > 0) {
-      saveConversation(props.headers?.['X-Conversation-Id'] || '', chat.messages);
-    }
-  }, [chat.messages, props.headers]);
+  // useEffect(() => {
+  //   if (chat.messages.length > 0) {
+  //     saveConversation(props.headers?.['X-Conversation-Id'] || '', chat.messages);
+  //   }
+  // }, [chat.messages, props.headers]);
 
   const saveConversation = async (conversationId: string, messages: Message[]) => {
     const supabase = createClient();
@@ -460,34 +534,9 @@ export function ChatWindow(props: {
         const supabase = createClient();
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return;
-
-        // Create new empty conversation
-        const { data, error } = await supabase
-          .from('conversations')
-          .insert({
-            user_uuid: session.user.id,
-            messages: [],
-            updated_at: new Date().toISOString()
-          })
-          .select()
-          .single();
-
-        if (error) {
-          console.error('Error creating new conversation:', error);
-          toast.error('Failed to create new conversation');
-          return;
-        }
-
-        if (data) {
-          // Update headers with new conversation ID
-          if (props.headers) {
-            props.headers['X-Conversation-Id'] = data.id;
-          }
-          // Notify parent about new conversation
-          props.onConversationCreated?.(data.id, data);
-        }
       }
-
+      // Save conversation before submitting
+      saveConversation(props.headers?.['X-Conversation-Id'] || '', []);
       chat.handleSubmit(e);
     } catch (error) {
       console.error("Error sending message:", error);
@@ -506,7 +555,11 @@ export function ChatWindow(props: {
   return (
     <ChatLayout
       content={
-        chat.messages.length === 0 ? (
+        isLoading ? (
+          <div className="flex items-center justify-center h-full">
+            <LoaderCircle className="h-8 w-8 animate-spin" />
+          </div>
+        ) : chat.messages.length === 0 ? (
           <div>{props.emptyStateComponent}</div>
         ) : (
           <ChatMessages
