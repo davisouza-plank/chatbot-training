@@ -334,22 +334,54 @@ export function ChatWindow(props: {
       if (reader) {
         // Read the stream
         const readStream = async () => {
+          let buffer = ''; // Buffer to store incomplete chunks
           try {
             while (true) {
               const { done, value } = await reader.read();
-              if (done) break;
+              if (done) {
+                // Process any remaining data in the buffer
+                if (buffer) {
+                  try {
+                    const update = JSON.parse(buffer) as ChatMessage;
+                    chat.setMessages(messages => {
+                      const lastMessage = messages[messages.length - 1] as ChatMessage;
+                      if (lastMessage && 
+                          lastMessage.role === update.role && 
+                          lastMessage.name === update.name) {
+                        const newMessages = [
+                          ...messages.slice(0, -1),
+                          {
+                            ...lastMessage,
+                            content: update.content || lastMessage.content,
+                            timestamp: new Date().toISOString()
+                          }
+                        ];
+                        saveConversation(props.headers?.['X-Conversation-Id'] || '', newMessages);
+                        return newMessages;
+                      }
+                      return messages;
+                    });
+                  } catch (e) {
+                    console.warn("Error parsing final buffer:", e);
+                  }
+                }
+                break;
+              }
               
               // Decode the stream chunk
               const chunk = decoder.decode(value);
+              buffer += chunk;
               
               // Match complete messages in the format "0:{...}"
               const messageRegex = /0:(\{(?:[^{}]|(?:\{[^{}]*\}))*\})/g;
-              const matches = Array.from(chunk.matchAll(messageRegex));
+              let match;
+              let lastIndex = 0;
               
-              for (const match of matches) {
+              while ((match = messageRegex.exec(buffer)) !== null) {
                 try {
                   const jsonContent = match[1];
                   const update = JSON.parse(jsonContent) as ChatMessage;
+                  lastIndex = match.index + match[0].length;
                   
                   // Update the last message with the new content
                   chat.setMessages(messages => {
@@ -381,7 +413,6 @@ export function ChatWindow(props: {
                         content: update.content || ''
                       }
                     ];
-                    // Save messages immediately after update
                     saveConversation(props.headers?.['X-Conversation-Id'] || '', newMessages);
                     return newMessages;
                   });
@@ -389,6 +420,9 @@ export function ChatWindow(props: {
                   console.error("Error parsing stream chunk:", e);
                 }
               }
+              
+              // Keep any incomplete message in the buffer
+              buffer = buffer.slice(lastIndex);
             }
           } catch (e) {
             console.error("Error reading stream:", e);
