@@ -59,8 +59,8 @@ export function ChatMessageBubble(props: {
       className={cn(
         `rounded-[24px] max-w-[80%] mb-8 flex`,
         props.message.role === "user"
-          ? "bg-secondary text-secondary-foreground px-4 py-2"
-          : null,
+          ? "bg-secondary text-secondary-foreground px-4 pt-4 pb-2"
+          : "bg-secondary/50 pl-2 pr-4 pt-4 pb-2",
         props.message.role === "user" ? "ml-auto" : "mr-auto",
       )}
     >
@@ -77,7 +77,7 @@ export function ChatMessageBubble(props: {
             )}
           </div>
           {props.message.name && (
-            <span className={cn("text-xs mt-1 font-medium", getAgentColor(props.message.name))}>
+            <span className={cn("text-xs mt-1 font-medium min-w-[70px] text-center", getAgentColor(props.message.name))}>
               {props.message.name}
             </span>
           )}
